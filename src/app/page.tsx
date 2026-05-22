@@ -4,7 +4,9 @@ import dynamic from 'next/dynamic';
 import type { School, SchoolTypKey, MarkerStyle, Theme, DetailState, SchoolFortbildungen } from '@/types';
 import type { Role } from '@/types/auth';
 import { DEMO_USERS } from '@/types/auth';
-import { SCHULEN, SCHULTYPEN, FORTBILDUNGEN_DEFAULT } from '@/data/schools';
+import { SCHULTYPEN } from '@/data/schools';
+import * as schoolService from '@/lib/services/schoolService';
+import * as trainingNeedService from '@/lib/services/trainingNeedService';
 import Sidebar from '@/components/sidebar/Sidebar';
 import SchoolDetail from '@/components/detail/SchoolDetail';
 import CompareModal from '@/components/compare/CompareModal';
@@ -83,15 +85,11 @@ export default function Home() {
   const [showCompare, setShowCompare] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const [fortbildungen, setFortbildungen] = useState<Record<string, SchoolFortbildungen>>(() => {
-    const map: Record<string, SchoolFortbildungen> = {};
-    SCHULEN.forEach((s, i) => {
-      if (i % 3 === 0) map[s.id] = JSON.parse(JSON.stringify(FORTBILDUNGEN_DEFAULT));
-      else if (i % 5 === 0) map[s.id] = { laufend: [FORTBILDUNGEN_DEFAULT.laufend[0]], bedarf: [] };
-      else map[s.id] = { laufend: [], bedarf: [] };
-    });
-    return map;
-  });
+  // Demo data: populated from mock defaults.
+  // TODO (D1): Replace initializer with an API fetch on mount.
+  const [fortbildungen, setFortbildungen] = useState<Record<string, SchoolFortbildungen>>(
+    trainingNeedService.initializeDemoData
+  );
 
   // Apply theme to <html>
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
@@ -107,18 +105,10 @@ export default function Home() {
     setTimeout(() => setToast(null), 2200);
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return SCHULEN.filter((s) => {
-      if (typFilter && s.typ !== typFilter) return false;
-      if (!q) return true;
-      return (
-        s.name.toLowerCase().includes(q) ||
-        s.ort.toLowerCase().includes(q) ||
-        s.leitung.toLowerCase().includes(q)
-      );
-    });
-  }, [query, typFilter]);
+  const filtered = useMemo(
+    () => schoolService.searchSchools(query, typFilter),
+    [query, typFilter],
+  );
 
   function toggleCompare(id: string) {
     setCompareIds((prev) => {
@@ -156,7 +146,7 @@ export default function Home() {
   }
 
   const compareSchools = compareIds
-    .map((id) => SCHULEN.find((s) => s.id === id))
+    .map((id) => schoolService.getSchoolById(id))
     .filter((s): s is School => Boolean(s));
 
   const visibleTabs = getTabsForRole(role);
@@ -165,7 +155,7 @@ export default function Home() {
   const showMap  = !isDashboardTab && (tab === 'karte' || (vp !== 'mobile' && tab === 'liste'));
 
   const demoUser = DEMO_USERS[role];
-  const mySchool = demoUser.schoolId ? SCHULEN.find((s) => s.id === demoUser.schoolId) : null;
+  const mySchool = demoUser.schoolId ? schoolService.getSchoolById(demoUser.schoolId) ?? null : null;
   const myFortbildungen = mySchool ? (fortbildungen[mySchool.id] ?? { laufend: [], bedarf: [] }) : null;
 
   return (
@@ -272,13 +262,13 @@ export default function Home() {
                 <SchoolDashboard school={mySchool} fortbildungen={myFortbildungen} />
               )}
               {tab === 'inbox' && (
-                <CoordinatorDashboard schools={SCHULEN} fortbildungen={fortbildungen} />
+                <CoordinatorDashboard schools={schoolService.getAllSchools()} fortbildungen={fortbildungen} />
               )}
               {tab === 'admin' && (
-                <AdminDashboard schools={SCHULEN} />
+                <AdminDashboard schools={schoolService.getAllSchools()} />
               )}
               {tab === 'overview' && (
-                <LeadershipDashboard schools={SCHULEN} fortbildungen={fortbildungen} />
+                <LeadershipDashboard schools={schoolService.getAllSchools()} fortbildungen={fortbildungen} />
               )}
             </div>
           ) : (
@@ -286,7 +276,7 @@ export default function Home() {
               {showList && (
                 <Sidebar
                   schulen={filtered}
-                  allSchulen={SCHULEN}
+                  allSchulen={schoolService.getAllSchools()}
                   query={query}
                   onQuery={setQuery}
                   typFilter={typFilter}

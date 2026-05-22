@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { TrainingNeed, TrainingNeedFormat, TrainingNeedPriority } from '@/types/trainingNeed';
 import { FORMAT_LABELS, PRIORITY_LABELS } from '@/types/trainingNeed';
+import * as trainingNeedService from '@/lib/services/trainingNeedService';
 
 interface Props {
   schoolId: string;
@@ -30,18 +31,13 @@ export default function TrainingNeedForm({ schoolId, onSubmit }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.topic.trim()) return;
-    const now = new Date().toISOString();
-    onSubmit({
-      id:              crypto.randomUUID(),
-      schoolId,
+    onSubmit(trainingNeedService.createTrainingNeed(schoolId, {
       topic:           form.topic.trim(),
       description:     form.description.trim(),
       priority:        form.priority,
       targetGroup:     form.targetGroup.trim(),
       preferredFormat: form.preferredFormat,
-      createdAt:       now,
-      updatedAt:       now,
-    });
+    }));
     setForm(EMPTY_FORM);
     setOpen(false);
   }
