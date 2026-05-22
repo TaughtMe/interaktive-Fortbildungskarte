@@ -1,0 +1,121 @@
+/**
+ * DB schema types — row shapes for future Cloudflare D1 / Drizzle tables.
+ *
+ * Naming convention: <Entity>Row = what a D1 SELECT returns.
+ * Repositories map *Row → UI type; UI types live in src/types/.
+ *
+ * All IDs are string (UUID). Timestamps are ISO-8601 strings (D1 TEXT).
+ * Nullable columns are typed as `string | null` (not `undefined`).
+ *
+ * TODO (Drizzle): Replace these interfaces with `typeof <table>.$inferSelect`
+ *                 once src/lib/db/schema.ts is written.
+ */
+
+import type { SchoolTypKey } from '@/types';
+import type { TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types/trainingNeed';
+import type { Role } from '@/types/auth';
+
+// ── schools ──────────────────────────────────────────────────────────────────
+// Future table: CREATE TABLE schools (id TEXT PRIMARY KEY, ...)
+export interface SchoolRow {
+  id:         string;
+  name:       string;
+  ort:        string;
+  typ:        SchoolTypKey;
+  lat:        number;
+  lng:        number;
+  adresse:    string;
+  tel:        string;
+  fax:        string | null;   // UI uses '' as fallback; D1 stores NULL
+  mail:       string;
+  web:        string | null;
+  leitung:    string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── users ─────────────────────────────────────────────────────────────────────
+// Future table: CREATE TABLE users (id TEXT PRIMARY KEY, ...)
+// Relationship: users.school_id → schools.id (nullable; only for role='school')
+export interface UserRow {
+  id:           string;
+  email:        string;
+  display_name: string;
+  role:         Exclude<Role, 'public'>;  // 'public' is anonymous, not a DB user
+  school_id:    string | null;
+  created_at:   string;
+  updated_at:   string;
+}
+
+// ── sessions ──────────────────────────────────────────────────────────────────
+// Future table: CREATE TABLE sessions (id TEXT PRIMARY KEY, ...)
+// Relationship: sessions.user_id → users.id
+// TODO (auth): Populate via Cloudflare Workers KV or D1 after login flow is built.
+export interface SessionRow {
+  id:         string;
+  user_id:    string;
+  expires_at: string;
+  created_at: string;
+}
+
+// ── training_needs ────────────────────────────────────────────────────────────
+// Future table: CREATE TABLE training_needs (id TEXT PRIMARY KEY, ...)
+// Relationships:
+//   training_needs.school_id   → schools.id
+//   training_needs.created_by  → users.id (nullable until auth exists)
+export interface TrainingNeedRow {
+  id:               string;
+  school_id:        string;
+  created_by:       string | null;       // user_id; NULL until auth is wired
+  topic:            string;
+  description:      string;
+  priority:         TrainingNeedPriority;
+  target_group:     string;
+  preferred_format: TrainingNeedFormat;
+  status:           TrainingNeedStatus;
+  created_at:       string;
+  updated_at:       string;
+}
+
+// ── training_offers ───────────────────────────────────────────────────────────
+// Future table: CREATE TABLE training_offers (id TEXT PRIMARY KEY, ...)
+// Relationship: training_offers.training_need_id → training_needs.id (nullable;
+//               an offer may be created proactively without a specific need)
+export type TrainingOfferStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
+
+export interface TrainingOfferRow {
+  id:                 string;
+  training_need_id:   string | null;
+  title:              string;
+  description:        string;
+  date:               string | null;  // ISO-8601 date string
+  location:           string | null;
+  max_participants:   number | null;
+  format:             TrainingNeedFormat;
+  status:             TrainingOfferStatus;
+  created_at:         string;
+  updated_at:         string;
+}
+
+// ── audit_logs ────────────────────────────────────────────────────────────────
+// Future table: CREATE TABLE audit_logs (id TEXT PRIMARY KEY, ...)
+// Relationship: audit_logs.user_id → users.id (nullable for anonymous actions)
+// TODO (D1): Implement write path once auth + mutations are in place.
+export type AuditAction =
+  | 'training_need.created'
+  | 'training_need.updated'
+  | 'training_need.deleted'
+  | 'training_offer.created'
+  | 'training_offer.updated'
+  | 'user.created'
+  | 'user.role_changed';
+
+export interface AuditLogRow {
+  id:          string;
+  user_id:     string | null;
+  action:      AuditAction;
+  entity_type: string;
+  entity_id:   string;
+  details:     string | null;  // JSON string; parse with JSON.parse() at read time
+  created_at:  string;
+}

@@ -5,7 +5,7 @@ export type MarkerStyle  = 'pin' | 'dot' | 'icon';
 export type Theme        = 'light' | 'dark';
 export type Prio         = 'hoch' | 'mittel' | 'niedrig';
 
-export type { TrainingNeed, TrainingNeedFormat, TrainingNeedPriority } from './trainingNeed';
+export type { TrainingNeed, TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from './trainingNeed';
 
 export interface SchoolType {
   key:   SchoolTypKey;
