@@ -1,0 +1,114 @@
+import { doublePrecision, index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import type { Role } from '@/types/auth';
+import type { SchoolTypKey, TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types';
+import type { AuditAction, TrainingOfferStatus } from './schema.types';
+
+// PostgreSQL preparation only. IDs intentionally stay text-based for now:
+// existing school IDs are stable semantic slugs, and this avoids a migration-only
+// UUID rewrite before a real Supabase/PostgreSQL connection exists.
+
+export const schools = pgTable('schools', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  ort: text('ort').notNull(),
+  typ: text('typ').$type<SchoolTypKey>().notNull(),
+  lat: doublePrecision('lat').notNull(),
+  lng: doublePrecision('lng').notNull(),
+  adresse: text('adresse').notNull(),
+  tel: text('tel').notNull(),
+  fax: text('fax'),
+  mail: text('mail').notNull(),
+  web: text('web'),
+  leitung: text('leitung'),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_schools_typ_idx').on(table.typ),
+  index('pg_schools_ort_idx').on(table.ort),
+]);
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  display_name: text('display_name').notNull(),
+  role: text('role').$type<Exclude<Role, 'public'>>().notNull(),
+  school_id: text('school_id').references(() => schools.id),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_users_school_id_idx').on(table.school_id),
+  index('pg_users_role_idx').on(table.role),
+]);
+
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull().references(() => users.id),
+  expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_sessions_user_id_idx').on(table.user_id),
+  index('pg_sessions_expires_at_idx').on(table.expires_at),
+]);
+
+export const trainingNeeds = pgTable('training_needs', {
+  id: text('id').primaryKey(),
+  school_id: text('school_id').notNull().references(() => schools.id),
+  created_by: text('created_by').references(() => users.id),
+  topic: text('topic').notNull(),
+  description: text('description').notNull(),
+  priority: text('priority').$type<TrainingNeedPriority>().notNull(),
+  target_group: text('target_group').notNull(),
+  preferred_format: text('preferred_format').$type<TrainingNeedFormat>().notNull(),
+  status: text('status').$type<TrainingNeedStatus>().notNull().default('open'),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_training_needs_school_id_idx').on(table.school_id),
+  index('pg_training_needs_status_idx').on(table.status),
+  index('pg_training_needs_priority_idx').on(table.priority),
+]);
+
+export const trainingOffers = pgTable('training_offers', {
+  id: text('id').primaryKey(),
+  training_need_id: text('training_need_id').references(() => trainingNeeds.id),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  date: timestamp('date', { withTimezone: true }),
+  location: text('location'),
+  max_participants: integer('max_participants'),
+  format: text('format').$type<TrainingNeedFormat>().notNull(),
+  status: text('status').$type<TrainingOfferStatus>().notNull().default('planned'),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_training_offers_training_need_id_idx').on(table.training_need_id),
+  index('pg_training_offers_status_idx').on(table.status),
+  index('pg_training_offers_date_idx').on(table.date),
+]);
+
+export const auditLogs = pgTable('audit_logs', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').references(() => users.id),
+  action: text('action').$type<AuditAction>().notNull(),
+  entity_type: text('entity_type').notNull(),
+  entity_id: text('entity_id').notNull(),
+  details: text('details'),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_audit_logs_user_id_idx').on(table.user_id),
+  index('pg_audit_logs_entity_idx').on(table.entity_type, table.entity_id),
+  index('pg_audit_logs_created_at_idx').on(table.created_at),
+]);
+
+export type PgSchoolSelect = typeof schools.$inferSelect;
+export type PgSchoolInsert = typeof schools.$inferInsert;
+export type PgUserSelect = typeof users.$inferSelect;
+export type PgUserInsert = typeof users.$inferInsert;
+export type PgSessionSelect = typeof sessions.$inferSelect;
+export type PgSessionInsert = typeof sessions.$inferInsert;
+export type PgTrainingNeedSelect = typeof trainingNeeds.$inferSelect;
+export type PgTrainingNeedInsert = typeof trainingNeeds.$inferInsert;
+export type PgTrainingOfferSelect = typeof trainingOffers.$inferSelect;
+export type PgTrainingOfferInsert = typeof trainingOffers.$inferInsert;
+export type PgAuditLogSelect = typeof auditLogs.$inferSelect;
+export type PgAuditLogInsert = typeof auditLogs.$inferInsert;

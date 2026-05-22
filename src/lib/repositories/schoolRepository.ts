@@ -1,13 +1,29 @@
 import { SCHULEN } from '@/data/schools';
+import { isD1DataSource } from '@/lib/config/dataSource';
+import { getDbClient } from '@/lib/db/client';
 import type { School, SchoolTypKey } from '@/types';
 
-// TODO (D1): Replace with `db.prepare('SELECT * FROM schools').all<School>()`
 export function getAllSchools(): School[] {
+  if (isD1DataSource()) {
+    const db = getDbClient();
+    if (db) {
+      // TODO (D1): Run `SELECT * FROM schools` on the server/API layer and map rows via schoolMapper.
+    }
+    // Mock fallback stays active while D1 bindings or async API reads are not available.
+  }
+
   return SCHULEN;
 }
 
-// TODO (D1): Replace with `db.prepare('SELECT * FROM schools WHERE id = ?').first<School>(id)`
 export function getSchoolById(id: string): School | undefined {
+  if (isD1DataSource()) {
+    const db = getDbClient();
+    if (db) {
+      // TODO (D1): Run `SELECT * FROM schools WHERE id = ?` and map the row via schoolMapper.
+    }
+    // Mock fallback stays active while D1 bindings or async API reads are not available.
+  }
+
   return SCHULEN.find((s) => s.id === id);
 }
 

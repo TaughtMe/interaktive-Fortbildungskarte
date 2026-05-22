@@ -9,8 +9,12 @@ export function createTrainingNeed(
   return trainingNeedRepo.createTrainingNeed(schoolId, partial);
 }
 
+export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
+  return trainingNeedRepo.getTrainingNeeds();
+}
+
 // Demo data initializer — call once for the initial React state.
 // TODO (D1): Replace with a useEffect that fetches from the API on mount.
 export function initializeDemoData(): Record<string, SchoolFortbildungen> {
-  return trainingNeedRepo.initializeDemoData();
+  return trainingNeedRepo.getTrainingNeeds();
 }

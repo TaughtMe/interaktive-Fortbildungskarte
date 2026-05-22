@@ -1,12 +1,21 @@
 import { SCHULEN, FORTBILDUNGEN_DEFAULT } from '@/data/schools';
+import { isD1DataSource } from '@/lib/config/dataSource';
+import { getDbClient } from '@/lib/db/client';
 import type { SchoolFortbildungen } from '@/types';
 import type { TrainingNeed } from '@/types/trainingNeed';
 
-// TODO (D1): Replace with INSERT INTO training_needs (...) VALUES (...)
 export function createTrainingNeed(
   schoolId: string,
   partial: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
 ): TrainingNeed {
+  if (isD1DataSource()) {
+    const db = getDbClient();
+    if (db) {
+      // TODO (D1): Insert into `training_needs` on the server/API layer and return the mapped row.
+    }
+    // Mock fallback keeps local Bedarfsmeldungen working without D1 bindings.
+  }
+
   const now = new Date().toISOString();
   return {
     id:        crypto.randomUUID(),
@@ -15,6 +24,18 @@ export function createTrainingNeed(
     updatedAt: now,
     ...partial,
   };
+}
+
+export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
+  if (isD1DataSource()) {
+    const db = getDbClient();
+    if (db) {
+      // TODO (D1): Query `training_needs`, group by `school_id`, and map rows via trainingNeedMapper.
+    }
+    // Mock fallback stays active until D1 reads are moved behind a server/API boundary.
+  }
+
+  return initializeDemoData();
 }
 
 // Demo data: distributes FORTBILDUNGEN_DEFAULT across schools by index pattern.
