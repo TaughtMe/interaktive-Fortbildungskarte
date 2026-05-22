@@ -9,6 +9,7 @@ out/
 dist/
 .vercel/
 .cloudflare/
+.wrangler/
 
 # Environment
 .env
@@ -16,6 +17,12 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+.dev.vars
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
 
 # Misc
 .DS_Store

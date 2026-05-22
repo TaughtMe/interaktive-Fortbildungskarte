@@ -6,10 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply schulamt-fortbildungskarte-local --local"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
+    "drizzle-orm": "^0.45.2",
     "leaflet": "^1.9.4",
     "next": "^16.2.6",
     "react": "^19.0.0",
@@ -19,8 +22,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "^16.2.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.94.0"
   }
 }
