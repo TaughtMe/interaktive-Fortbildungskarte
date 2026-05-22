@@ -37,6 +37,8 @@ Dieser D1-Stand bleibt als Alternative erhalten und wird nicht blind gelöscht. 
 
 Neu vorbereitet ist `src/lib/db/schema.pg.ts` als PostgreSQL-Drizzle-Schema mit `pgTable`, `text`, `timestamp`, `integer` und `doublePrecision`.
 
+Zusätzlich gibt es eine separate PostgreSQL-Drizzle-Konfiguration in `drizzle.pg.config.ts`. Sie zeigt auf `./src/lib/db/schema.pg.ts`, schreibt künftige PostgreSQL-Migrationen nach `./drizzle-pg/migrations` und nutzt `process.env.DATABASE_URL` nur als vorbereiteten Anschlusswert. Wenn `DATABASE_URL` fehlt, wird eine absichtlich ungültige Platzhalter-URL verwendet, damit keine versehentliche produktive Verbindung entsteht.
+
 Die vorhandenen Fach-Tabellen wurden übertragen:
 
 | Tabelle | PostgreSQL-Abbildung |
@@ -59,6 +61,16 @@ IDs bleiben zunächst `text`, weil vorhandene Schul-IDs stabile sprechende Slugs
 - Keine Passwörter, Sessions oder Cookies
 - Keine Änderung der laufenden Mock-/Staticdaten-Strategie
 
+## Drizzle-Befehle
+
+| Befehl | Zweck | Nutzung |
+|---|---|---|
+| `npm run db:pg:generate` | Erzeugt PostgreSQL-Migrationen aus `schema.pg.ts`. | Sicher vorbereitend, solange keine Migration angewendet wird. |
+| `npm run db:pg:check` | Prüft die PostgreSQL-Migrationsdateien. | Sicher vorbereitend. |
+| `npm run db:pg:migrate` | Wendet PostgreSQL-Migrationen gegen `DATABASE_URL` an. | Erst nach bewusster Freigabe und mit geprüfter Zielumgebung nutzen. |
+
+Echte Migrationen gegen Supabase erfolgen erst nach ausdrücklicher Freigabe. D1 bleibt bis dahin als Alternative dokumentiert und technisch vorhanden.
+
 ## Empfehlung
 
-Der nächste sinnvolle Schritt ist ein separates PostgreSQL-Drizzle-Konzept für lokale Migrationen, zum Beispiel mit eigener `drizzle.pg.config.ts` und ausschließlich Platzhalter-`DATABASE_URL`. Dieser Schritt sollte erst erfolgen, wenn klar ist, ob zunächst lokal gegen PostgreSQL oder später gegen ein Supabase-Projekt getestet werden soll.
+Der nächste sinnvolle Schritt ist eine bewusst freigegebene lokale PostgreSQL-Testmigration, nicht direkt Supabase-Produktion. Dafür sollte zuerst geklärt werden, ob gegen eine lokale PostgreSQL-Instanz oder eine isolierte Supabase-Testinstanz gearbeitet wird.

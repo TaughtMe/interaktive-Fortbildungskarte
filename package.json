@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "wrangler d1 migrations apply schulamt-fortbildungskarte-local --local"
+    "db:migrate:local": "wrangler d1 migrations apply schulamt-fortbildungskarte-local --local",
+    "db:pg:generate": "drizzle-kit generate --config=drizzle.pg.config.ts",
+    "db:pg:check": "drizzle-kit check --config=drizzle.pg.config.ts",
+    "db:pg:migrate": "drizzle-kit migrate --config=drizzle.pg.config.ts"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",

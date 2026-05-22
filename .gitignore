@@ -23,6 +23,21 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+*.dump
+*.sql.gz
+*.backup
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+supabase/seed.local.sql
+postgres-dumps/
+supabase-dumps/
+
+# Keep Drizzle migrations versionable.
+!drizzle/migrations/
+!drizzle/migrations/**
+!drizzle-pg/migrations/
+!drizzle-pg/migrations/**
 
 # Misc
 .DS_Store
