@@ -52,6 +52,8 @@ Die vorhandenen Fach-Tabellen wurden übertragen:
 
 IDs bleiben zunächst `text`, weil vorhandene Schul-IDs stabile sprechende Slugs sind und die Seed-/Mockdaten ohne künstliche UUID-Migration weiter nutzbar bleiben. Für neu entstehende produktive Entitäten kann später entschieden werden, ob UUIDs eingeführt werden.
 
+Die erste PostgreSQL-Migration wurde lokal vorbereitet und liegt versionierbar unter `drizzle-pg/migrations`. Sie wurde noch nicht gegen eine echte Datenbank angewendet. Die Anwendung läuft weiterhin standardmäßig mit Mock-/Staticdaten und ohne aktive PostgreSQL- oder Supabase-Verbindung.
+
 ## Nicht umgesetzt
 
 - Keine produktive Supabase-Verbindung
