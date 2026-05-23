@@ -3,10 +3,14 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import type { School, SchoolTypKey, MarkerStyle, Theme, DetailState, SchoolFortbildungen } from '@/types';
 import type { Role } from '@/types/auth';
+import type { TrainingNeed } from '@/types/trainingNeed';
 import { DEMO_USERS } from '@/types/auth';
 import { SCHULTYPEN } from '@/data/schools';
 import * as schoolService from '@/lib/services/schoolService';
 import * as trainingNeedService from '@/lib/services/trainingNeedService';
+import { fetchSchools } from '@/lib/api/schoolsApi';
+import { createTrainingNeedViaApi, fetchTrainingNeeds } from '@/lib/api/trainingNeedsApi';
+import { isApiModeEnabled } from '@/lib/config/runtimeMode';
 import Sidebar from '@/components/sidebar/Sidebar';
 import SchoolDetail from '@/components/detail/SchoolDetail';
 import CompareModal from '@/components/compare/CompareModal';
@@ -84,9 +88,10 @@ export default function Home() {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [schools, setSchools] = useState<School[]>(() => schoolService.getAllSchools());
+  const useApi = isApiModeEnabled();
 
-  // Demo data: populated from mock defaults.
-  // TODO (D1): Replace initializer with an API fetch on mount.
+  // Mock data remains the default. Optional API mode only hydrates over it.
   const [fortbildungen, setFortbildungen] = useState<Record<string, SchoolFortbildungen>>(
     trainingNeedService.initializeDemoData
   );
@@ -105,9 +110,65 @@ export default function Home() {
     setTimeout(() => setToast(null), 2200);
   }
 
+  useEffect(() => {
+    if (!useApi) return;
+
+    let cancelled = false;
+
+    async function loadApiData() {
+      const [schoolsResult, trainingNeedsResult] = await Promise.all([
+        fetchSchools(),
+        fetchTrainingNeeds(),
+      ]);
+
+      if (cancelled) return;
+
+      if (schoolsResult.ok) {
+        setSchools(schoolsResult.data);
+      } else {
+        console.warn('API schools fallback:', schoolsResult.error);
+      }
+
+      if (trainingNeedsResult.ok) {
+        setFortbildungen((prev) => {
+          const next: Record<string, SchoolFortbildungen> = {};
+          Object.entries(prev).forEach(([schoolId, data]) => {
+            next[schoolId] = { ...data, bedarf: [] };
+          });
+          trainingNeedsResult.data.forEach((need) => {
+            const existing = next[need.schoolId] ?? { laufend: [], bedarf: [] };
+            next[need.schoolId] = { ...existing, bedarf: [...existing.bedarf, need] };
+          });
+          return next;
+        });
+      } else {
+        console.warn('API training-needs fallback:', trainingNeedsResult.error);
+      }
+    }
+
+    loadApiData().catch((error) => {
+      console.warn('API data fallback:', error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi]);
+
   const filtered = useMemo(
-    () => schoolService.searchSchools(query, typFilter),
-    [query, typFilter],
+    () => {
+      const q = query.trim().toLowerCase();
+      return schools.filter((s) => {
+        if (typFilter && s.typ !== typFilter) return false;
+        if (!q) return true;
+        return (
+          s.name.toLowerCase().includes(q) ||
+          s.ort.toLowerCase().includes(q) ||
+          s.leitung.toLowerCase().includes(q)
+        );
+      });
+    },
+    [query, schools, typFilter],
   );
 
   function toggleCompare(id: string) {
@@ -145,8 +206,21 @@ export default function Home() {
     setFortbildungen((prev) => ({ ...prev, [id]: data }));
   }
 
+  async function createTrainingNeed(
+    schoolId: string,
+    input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+  ) {
+    if (!useApi) return trainingNeedService.createTrainingNeed(schoolId, input);
+
+    const result = await createTrainingNeedViaApi(schoolId, input);
+    if (result.ok) return result.data;
+
+    console.warn('API create training need fallback:', result.error);
+    return trainingNeedService.createTrainingNeed(schoolId, input);
+  }
+
   const compareSchools = compareIds
-    .map((id) => schoolService.getSchoolById(id))
+    .map((id) => schools.find((s) => s.id === id) ?? schoolService.getSchoolById(id))
     .filter((s): s is School => Boolean(s));
 
   const visibleTabs = getTabsForRole(role);
@@ -155,7 +229,9 @@ export default function Home() {
   const showMap  = !isDashboardTab && (tab === 'karte' || (vp !== 'mobile' && tab === 'liste'));
 
   const demoUser = DEMO_USERS[role];
-  const mySchool = demoUser.schoolId ? schoolService.getSchoolById(demoUser.schoolId) ?? null : null;
+  const mySchool = demoUser.schoolId
+    ? schools.find((s) => s.id === demoUser.schoolId) ?? schoolService.getSchoolById(demoUser.schoolId) ?? null
+    : null;
   const myFortbildungen = mySchool ? (fortbildungen[mySchool.id] ?? { laufend: [], bedarf: [] }) : null;
 
   return (
@@ -262,13 +338,13 @@ export default function Home() {
                 <SchoolDashboard school={mySchool} fortbildungen={myFortbildungen} />
               )}
               {tab === 'inbox' && (
-                <CoordinatorDashboard schools={schoolService.getAllSchools()} fortbildungen={fortbildungen} />
+                <CoordinatorDashboard schools={schools} fortbildungen={fortbildungen} />
               )}
               {tab === 'admin' && (
-                <AdminDashboard schools={schoolService.getAllSchools()} />
+                <AdminDashboard schools={schools} />
               )}
               {tab === 'overview' && (
-                <LeadershipDashboard schools={schoolService.getAllSchools()} fortbildungen={fortbildungen} />
+                <LeadershipDashboard schools={schools} fortbildungen={fortbildungen} />
               )}
             </div>
           ) : (
@@ -276,7 +352,7 @@ export default function Home() {
               {showList && (
                 <Sidebar
                   schulen={filtered}
-                  allSchulen={schoolService.getAllSchools()}
+                  allSchulen={schools}
                   query={query}
                   onQuery={setQuery}
                   typFilter={typFilter}
@@ -381,6 +457,7 @@ export default function Home() {
           compared={compareIds.includes(detail.school.id)}
           fortbildungen={fortbildungen}
           onUpdateFortbildungen={updateFortbildungen}
+          onCreateTrainingNeed={createTrainingNeed}
         />
       )}
 

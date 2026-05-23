@@ -27,6 +27,14 @@ npm run dev
 
 Die App bleibt ohne weitere Konfiguration im Mock-Betrieb. Keine `DATABASE_URL` setzen, solange nicht bewusst an einer isolierten PostgreSQL-/Supabase-Testdatenbank gearbeitet wird.
 
+Optional kann die UI gegen die vorbereiteten API-Routen lesen und schreiben:
+
+```bash
+NEXT_PUBLIC_USE_API=true npm run dev
+```
+
+Auch in diesem Modus nutzt die API aktuell Mock-/Service-Daten. Bei API-Fehlern fällt die UI auf den bisherigen Mock-/Service-Pfad zurück.
+
 ## Prüfen
 
 ```bash
@@ -80,9 +88,11 @@ Der Einstieg in die Projektdokumentation liegt unter `docs/README.md`.
 Wichtige Dateien für eine spätere Supabase/PostgreSQL-Anbindung:
 
 - `src/lib/db/schema.pg.ts`
+- `src/lib/db/postgresClient.ts`
 - `drizzle.pg.config.ts`
 - `drizzle-pg/migrations/`
 - `docs/ARCHITEKTUR_DATENBANK.md`
 - `docs/SUPABASE_SETUP.md`
+- `docs/TESTPLAN.md`
 
 Keine Zugangsdaten committen. Eine echte Supabase-`DATABASE_URL` gehört nur lokal in `.env.local`.

@@ -4,6 +4,20 @@ Die API ist aktuell eine vorbereitete Server-Grenze im Mock-Betrieb. Sie nutzt d
 
 Später soll diese Grenze an Supabase/PostgreSQL angebunden werden. D1 bleibt nur eine Alternative.
 
+## UI-Datenmodus
+
+Die Oberfläche verwendet standardmäßig weiterhin den bisherigen direkten Service-/Mock-Zugriff. Dadurch bleibt das bekannte Verhalten ohne zusätzliche Konfiguration vollständig erhalten.
+
+Optional kann die UI schrittweise gegen die API-Routen lesen und schreiben:
+
+```bash
+NEXT_PUBLIC_USE_API=true npm run dev
+```
+
+In diesem Modus lädt die UI Schulen über `GET /api/schools`, Fortbildungsbedarfe über `GET /api/training-needs` und sendet neue Bedarfsmeldungen über `POST /api/training-needs`.
+
+Wenn ein API-Fetch fehlschlägt oder eine unerwartete Antwort liefert, fällt die UI automatisch auf die bestehenden Mock-/Service-Daten zurück. Die API-Clients werfen keine unkontrollierten Fehler in die App, sondern liefern `{ ok: true, data }` oder `{ ok: false, error }`.
+
 ## Endpunkte
 
 | Methode | Pfad | Zweck |
@@ -43,6 +57,8 @@ Alle Felder im Beispiel sind erforderlich.
 ## Sicherheit und Betrieb
 
 - Mock-/Staticdaten bleiben Standard.
+- `NEXT_PUBLIC_USE_API=true` aktiviert nur den API-Fetch der UI; die API selbst nutzt aktuell weiterhin Mock-/Service-Daten.
+- PostgreSQL/Supabase ist vorbereitet, aber nicht aktiv angebunden.
 - Es gibt noch keine Authentifizierung.
 - Die API ist deshalb nicht produktiv geschuetzt.
 - Keine Sessions, Cookies oder Passwoerter werden verwendet.

@@ -9,7 +9,8 @@ Diese Dokumente beschreiben den aktuellen Vorbereitungsstand der Fortbildungskar
 3. `docs/DATENQUELLEN.md` fuer den aktuellen Mock-Betrieb und die vorbereitete D1-Alternative.
 4. `docs/DATENMODELL.md` fuer Entitaeten, UI-Typen und vorbereitete DB-Tabellen.
 5. `docs/ARCHITEKTUR_DATENBANK.md` fuer die Datenbankentscheidung: Supabase/PostgreSQL bevorzugt, D1 nur Alternative.
-6. `docs/SUPABASE_SETUP.md` erst lesen, wenn eine isolierte Supabase-Testmigration bewusst freigegeben wird.
+6. `docs/TESTPLAN.md` fuer manuelle Smoke-Tests im Mock- und optionalen API-Modus.
+7. `docs/SUPABASE_SETUP.md` erst lesen, wenn eine isolierte Supabase-Testmigration bewusst freigegeben wird.
 
 ## Dokumente
 
@@ -19,11 +20,13 @@ Diese Dokumente beschreiben den aktuellen Vorbereitungsstand der Fortbildungskar
 | `DATENMODELL.md` | Beschreibt Fachentitaeten, Rollen, UI-Typen und vorbereitete DB-Tabellen. |
 | `DATENQUELLEN.md` | Erklaert den Standard-Mockbetrieb und den nicht aktiven D1-Pfad. |
 | `ARCHITEKTUR_DATENBANK.md` | Begruendet PostgreSQL/Supabase als bevorzugte Zielrichtung. |
+| `TESTPLAN.md` | Beschreibt manuelle Pruefungen fuer UI, API-Endpunkte und sichere Build-/Typecheck-Kommandos. |
 | `SUPABASE_SETUP.md` | Sicherheitsanleitung fuer eine spaetere, freigegebene Supabase-Testanbindung. |
 
 ## Status
 
 - Mock-/Staticdaten sind aktiv und bleiben Standard.
+- Optionaler UI-API-Modus ist ueber `NEXT_PUBLIC_USE_API=true` verfuegbar und nutzt weiterhin Mock-/Service-Daten hinter den API-Routen.
 - PostgreSQL/Supabase ist die bevorzugte Zielrichtung, aber ohne aktive Verbindung.
 - D1 ist technisch vorbereitet, bleibt aber eine Alternative.
 - Keine Supabase Auth, keine produktive Authentifizierung, keine Sessions, keine Cookies, keine Passwoerter.

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import * as schoolService from '@/lib/services/schoolService';
 import * as trainingNeedService from '@/lib/services/trainingNeedService';
 import type { TrainingNeedFormat, TrainingNeedPriority } from '@/types/trainingNeed';
 
@@ -12,6 +13,10 @@ interface TrainingNeedRequestBody {
   priority?: unknown;
   targetGroup?: unknown;
   preferredFormat?: unknown;
+}
+
+function isTrainingNeedRequestBody(value: unknown): value is TrainingNeedRequestBody {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function readRequiredString(
@@ -37,16 +42,30 @@ function isTrainingNeedFormat(value: string): value is TrainingNeedFormat {
 }
 
 export async function GET() {
-  const trainingNeeds = await trainingNeedService.getAllTrainingNeedEntriesAsync();
+  try {
+    const trainingNeeds = await trainingNeedService.getAllTrainingNeedEntriesAsync();
 
-  return NextResponse.json({ data: trainingNeeds });
+    return NextResponse.json({ data: trainingNeeds });
+  } catch {
+    return NextResponse.json(
+      { error: 'Training needs could not be loaded' },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
   let body: TrainingNeedRequestBody;
 
   try {
-    body = await request.json();
+    const parsedBody: unknown = await request.json();
+    if (!isTrainingNeedRequestBody(parsedBody)) {
+      return NextResponse.json(
+        { error: 'Invalid JSON body' },
+        { status: 400 },
+      );
+    }
+    body = parsedBody;
   } catch {
     return NextResponse.json(
       { error: 'Invalid JSON body' },
@@ -79,14 +98,31 @@ export async function POST(request: Request) {
 
   const validatedPriority = priority as TrainingNeedPriority;
   const validatedPreferredFormat = preferredFormat as TrainingNeedFormat;
+  const school = await schoolService.getSchoolByIdAsync(schoolId!);
 
-  const trainingNeed = await trainingNeedService.createTrainingNeedAsync(schoolId!, {
-    topic: topic!,
-    description: description!,
-    priority: validatedPriority,
-    targetGroup: targetGroup!,
-    preferredFormat: validatedPreferredFormat,
-  });
+  if (!school) {
+    return NextResponse.json(
+      { error: 'Unknown schoolId' },
+      { status: 400 },
+    );
+  }
+
+  let trainingNeed;
+
+  try {
+    trainingNeed = await trainingNeedService.createTrainingNeedAsync(schoolId!, {
+      topic: topic!,
+      description: description!,
+      priority: validatedPriority,
+      targetGroup: targetGroup!,
+      preferredFormat: validatedPreferredFormat,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: 'Training need could not be created' },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ data: trainingNeed }, { status: 201 });
 }

@@ -8,15 +8,22 @@ interface RouteContext {
 }
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  const { id } = await params;
-  const school = await schoolService.getSchoolByIdAsync(id);
+  try {
+    const { id } = await params;
+    const school = await schoolService.getSchoolByIdAsync(id);
 
-  if (!school) {
+    if (!school) {
+      return NextResponse.json(
+        { error: 'School not found' },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ data: school });
+  } catch {
     return NextResponse.json(
-      { error: 'School not found' },
-      { status: 404 },
+      { error: 'School could not be loaded' },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json({ data: school });
 }

@@ -2,11 +2,14 @@
 import { useState } from 'react';
 import type { TrainingNeed, TrainingNeedFormat, TrainingNeedPriority } from '@/types/trainingNeed';
 import { FORMAT_LABELS, PRIORITY_LABELS } from '@/types/trainingNeed';
-import * as trainingNeedService from '@/lib/services/trainingNeedService';
 
 interface Props {
   schoolId: string;
   onSubmit: (need: TrainingNeed) => void;
+  onCreateNeed: (
+    schoolId: string,
+    input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+  ) => Promise<TrainingNeed> | TrainingNeed;
 }
 
 const FORMAT_OPTIONS: TrainingNeedFormat[]   = ['praesenz', 'online', 'schilf', 'beratung'];
@@ -20,7 +23,7 @@ const EMPTY_FORM = {
   preferredFormat: 'praesenz' as TrainingNeedFormat,
 };
 
-export default function TrainingNeedForm({ schoolId, onSubmit }: Props) {
+export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: Props) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [open, setOpen] = useState(false);
 
@@ -28,16 +31,17 @@ export default function TrainingNeedForm({ schoolId, onSubmit }: Props) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.topic.trim()) return;
-    onSubmit(trainingNeedService.createTrainingNeed(schoolId, {
+    const need = await onCreateNeed(schoolId, {
       topic:           form.topic.trim(),
       description:     form.description.trim(),
       priority:        form.priority,
       targetGroup:     form.targetGroup.trim(),
       preferredFormat: form.preferredFormat,
-    }));
+    });
+    onSubmit(need);
     setForm(EMPTY_FORM);
     setOpen(false);
   }

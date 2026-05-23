@@ -1,0 +1,87 @@
+import type { TrainingNeed } from '@/types/trainingNeed';
+
+export interface ApiError {
+  message: string;
+  status?: number;
+}
+
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: ApiError };
+
+export type CreateTrainingNeedInput = Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>;
+
+interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+}
+
+function toApiError(error: unknown, fallbackMessage: string): ApiError {
+  if (error instanceof Error) return { message: error.message };
+  return { message: fallbackMessage };
+}
+
+async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+export async function fetchTrainingNeeds(): Promise<ApiResult<TrainingNeed[]>> {
+  try {
+    const response = await fetch('/api/training-needs', { cache: 'no-store' });
+    const payload = await readJson<TrainingNeed[]>(response);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: {
+          message: payload.error ?? 'Fortbildungsbedarfe konnten nicht geladen werden.',
+          status: response.status,
+        },
+      };
+    }
+
+    if (!Array.isArray(payload.data)) {
+      return { ok: false, error: { message: 'Ungueltige Antwort fuer Fortbildungsbedarfe.' } };
+    }
+
+    return { ok: true, data: payload.data };
+  } catch (error) {
+    return { ok: false, error: toApiError(error, 'Fortbildungsbedarfe konnten nicht geladen werden.') };
+  }
+}
+
+export async function createTrainingNeedViaApi(
+  schoolId: string,
+  input: CreateTrainingNeedInput,
+): Promise<ApiResult<TrainingNeed>> {
+  try {
+    const response = await fetch('/api/training-needs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schoolId, ...input }),
+    });
+    const payload = await readJson<TrainingNeed>(response);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: {
+          message: payload.error ?? 'Fortbildungsbedarf konnte nicht gesendet werden.',
+          status: response.status,
+        },
+      };
+    }
+
+    if (!payload.data) {
+      return { ok: false, error: { message: 'Ungueltige Antwort fuer Fortbildungsbedarf.' } };
+    }
+
+    return { ok: true, data: payload.data };
+  } catch (error) {
+    return { ok: false, error: toApiError(error, 'Fortbildungsbedarf konnte nicht gesendet werden.') };
+  }
+}

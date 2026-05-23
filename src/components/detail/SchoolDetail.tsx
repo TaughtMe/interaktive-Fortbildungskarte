@@ -14,11 +14,15 @@ interface Props {
   compared: boolean;
   fortbildungen: Record<string, SchoolFortbildungen>;
   onUpdateFortbildungen: (id: string, data: SchoolFortbildungen) => void;
+  onCreateTrainingNeed: (
+    schoolId: string,
+    input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+  ) => Promise<TrainingNeed> | TrainingNeed;
 }
 
 export default function SchoolDetail({
   school, origin, onClose, onCompareToggle, compared,
-  fortbildungen, onUpdateFortbildungen,
+  fortbildungen, onUpdateFortbildungen, onCreateTrainingNeed,
 }: Props) {
   const t = SCHULTYPEN[school.typ];
   const data: SchoolFortbildungen = fortbildungen[school.id] ?? { laufend: [], bedarf: [] };
@@ -254,7 +258,11 @@ export default function SchoolDetail({
                 </div>
               ))}
             </div>
-            <TrainingNeedForm schoolId={school.id} onSubmit={addNeed} />
+            <TrainingNeedForm
+              schoolId={school.id}
+              onSubmit={addNeed}
+              onCreateNeed={onCreateTrainingNeed}
+            />
           </div>
         </div>
 

@@ -3,7 +3,33 @@
 Stand: 2026-05  
 Status: Mock-Pfad aktiv. PostgreSQL/Supabase ist die bevorzugte Zielrichtung, D1 bleibt nur als vorbereitete Alternative im Repository.
 
-## Modi
+## UI-Datenmodus
+
+Der Standard bleibt Mock/Service direkt in der UI. Ohne `NEXT_PUBLIC_USE_API` wird das bisherige Verhalten beibehalten:
+
+- Schulen kommen direkt aus dem bestehenden Service-/Mock-Pfad.
+- Fortbildungsbedarfe starten aus den bestehenden Demo-Daten.
+- Neue Bedarfsmeldungen werden lokal als Mock-Objekte erzeugt.
+
+Optional kann die UI gegen die vorbereiteten API-Routen lesen und schreiben:
+
+```bash
+NEXT_PUBLIC_USE_API=true npm run dev
+```
+
+Dann gilt:
+
+- `GET /api/schools` lädt Schulen.
+- `GET /api/training-needs` lädt Fortbildungsbedarfe.
+- `POST /api/training-needs` erstellt neue Bedarfsmeldungen über die API-Grenze.
+
+Die API nutzt in diesem Stand weiterhin die bestehenden Mock-/Service-Daten. Es gibt dadurch noch keine echte Datenbankverbindung, keine Supabase-Anbindung, keine Authentifizierung, keine Sessions, keine Cookies und keine Passwörter.
+
+Falls API-Fetches fehlschlagen, bleibt der Mock-/Service-Fallback aktiv. Die UI soll dadurch keine weiße Seite oder unkontrollierte Runtime-Fehler erzeugen.
+
+Die zentrale Runtime-Konfiguration fuer den UI-Schalter liegt in `src/lib/config/runtimeMode.ts`. Die API-Clients liegen unter `src/lib/api/`.
+
+## Repository-Datenquellen
 
 Die App kennt zwei Datenquellen:
 
@@ -12,7 +38,7 @@ Die App kennt zwei Datenquellen:
 | `mock` | Verwendet die bestehenden Static-/Mockdaten aus `src/data/schools.ts` und den Demo-Initialzustand für Fortbildungsbedarfe. |
 | `d1` | Aktiviert den vorbereiteten D1-Pfad in der Repository-Schicht. D1 ist eine Alternative; echte produktive Queries sind nicht verdrahtet. |
 
-## Standardverhalten
+## Standardverhalten der Repository-Schicht
 
 Ohne Umgebungsvariable läuft die App immer mit `mock`.
 
@@ -53,3 +79,5 @@ Wenn `dataSource = d1` ist:
 - Keine Authentifizierung in diesem Schritt: keine Sessions, Cookies, Passwörter oder Login-Logik.
 
 PostgreSQL/Supabase wird für die nächste echte Datenbankanbindung bevorzugt. D1 bleibt technisch vorbereitet, aber nicht als aktive Zielarchitektur markiert.
+
+Ein inaktiver PostgreSQL-Adapter ist unter `src/lib/db/postgresClient.ts` vorbereitet. Er oeffnet keine Verbindung beim Import, setzt keine `DATABASE_URL` voraus und wird aktuell von der App nicht produktiv genutzt.
