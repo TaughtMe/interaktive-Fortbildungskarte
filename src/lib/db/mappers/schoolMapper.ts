@@ -1,7 +1,8 @@
 import type { School } from '@/types';
+import type { PgSchoolSelect } from '../schema.pg';
 import type { SchoolRow } from '../schema.types';
 
-export function mapSchoolRowToSchool(row: SchoolRow): School {
+export function mapSchoolRowToSchool(row: SchoolRow | PgSchoolSelect): School {
   return {
     id: row.id,
     name: row.name,

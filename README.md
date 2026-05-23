@@ -1,12 +1,12 @@
 # Interaktive Fortbildungskarte
 
-Interaktive Next.js-App zur Sichtung von Schulen und Fortbildungsbedarfen im Schulamtskontext. Der aktuelle Stand ist eine technisch vorbereitete Demo: Die App läuft standardmäßig mit Mock-/Staticdaten, ohne produktive Datenbankverbindung und ohne echte Authentifizierung.
+Interaktive Next.js-App zur Sichtung von Schulen und Fortbildungsbedarfen im Schulamtskontext. Die App läuft standardmäßig mit Mock-/Staticdaten. Für den MVP-Testbetrieb kann Supabase/PostgreSQL explizit als Datenquelle aktiviert werden, ohne Supabase Auth, Sessions, Cookies oder Passwörter.
 
 ## Aktueller Stand
 
 - Aktive App: Next.js unter `src/`
 - Standard-Datenquelle: Mock-/Staticdaten aus `src/data/schools.ts`
-- PostgreSQL/Supabase: bevorzugte Zielrichtung, Schema und Migrationen vorbereitet
+- PostgreSQL/Supabase: bevorzugte Zielrichtung; API-Routen können dauerhaft aus PostgreSQL lesen und Bedarfsmeldungen schreiben
 - Cloudflare D1: vorbereitete Alternative, nicht priorisierte Zielarchitektur
 - Legacy-Demo: nur Referenz unter `legacy/`
 - Keine produktive Authentifizierung, keine Sessions, keine Cookies, keine Passwörter
@@ -33,7 +33,29 @@ Optional kann die UI gegen die vorbereiteten API-Routen lesen und schreiben:
 NEXT_PUBLIC_USE_API=true npm run dev
 ```
 
-Auch in diesem Modus nutzt die API aktuell Mock-/Service-Daten. Bei API-Fehlern fällt die UI auf den bisherigen Mock-/Service-Pfad zurück.
+## Nutzbaren MVP mit Supabase/PostgreSQL starten
+
+Voraussetzung ist eine lokale, nicht versionierte `.env.local` mit der isolierten Testdatenbank:
+
+```env
+DATABASE_URL="postgresql://<USER>:<PASSWORT>@<HOST>:5432/<DB>?sslmode=require"
+```
+
+Migration und Seed nur bewusst gegen diese Testdatenbank ausführen:
+
+```bash
+set -a && . ./.env.local && set +a
+npm run db:pg:migrate
+SEED_PG_CONFIRM=seed-test-postgres npm run db:pg:seed
+```
+
+Danach den MVP mit API und PostgreSQL-Datenquelle starten:
+
+```bash
+DATA_SOURCE=postgres NEXT_PUBLIC_USE_API=true npm run dev
+```
+
+In diesem Modus laden `GET /api/schools` und `GET /api/training-needs` aus PostgreSQL. `POST /api/training-needs` speichert neue Bedarfsmeldungen dauerhaft.
 
 ## Prüfen
 
@@ -70,7 +92,7 @@ npm run verify
 
 ## Datenbankstrategie
 
-Supabase/PostgreSQL ist die bevorzugte nächste Richtung. Dafür liegen `src/lib/db/schema.pg.ts`, `drizzle.pg.config.ts` und `drizzle-pg/migrations/` als Vorbereitung vor. Ohne lokal gesetzte `DATABASE_URL` wird keine echte Verbindung erwartet.
+Supabase/PostgreSQL ist die bevorzugte Richtung. Dafür liegen `src/lib/db/schema.pg.ts`, `src/lib/db/postgresClient.ts`, `drizzle.pg.config.ts` und `drizzle-pg/migrations/` vor. Ohne lokal gesetzte `DATABASE_URL` und ohne `DATA_SOURCE=postgres` wird keine echte Verbindung für die API erwartet.
 
 D1 bleibt als vorbereitete Alternative im Projekt: `src/lib/db/schema.ts`, `drizzle.config.ts`, `drizzle/migrations/` und `wrangler.toml`. Diese Richtung ist dokumentiert, aber aktuell nicht bevorzugt.
 

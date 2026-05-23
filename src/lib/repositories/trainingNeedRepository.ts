@@ -1,5 +1,5 @@
 import { SCHULEN, FORTBILDUNGEN_DEFAULT } from '@/data/schools';
-import { isD1DataSource } from '@/lib/config/dataSource';
+import { isD1DataSource, isPostgresDataSource } from '@/lib/config/dataSource';
 import { getDbClient } from '@/lib/db/client';
 import type { SchoolFortbildungen } from '@/types';
 import type { TrainingNeed } from '@/types/trainingNeed';
@@ -36,6 +36,47 @@ export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
   }
 
   return initializeDemoData();
+}
+
+export async function createTrainingNeedAsync(
+  schoolId: string,
+  partial: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+): Promise<TrainingNeed> {
+  if (isPostgresDataSource()) {
+    const { createTrainingNeedInPostgres } = await import('@/lib/db/postgresClient');
+    const result = await createTrainingNeedInPostgres(schoolId, partial);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }
+
+  return createTrainingNeed(schoolId, partial);
+}
+
+export async function getAllTrainingNeedEntriesAsync(): Promise<TrainingNeed[]> {
+  if (isPostgresDataSource()) {
+    const { getTrainingNeedsFromPostgres } = await import('@/lib/db/postgresClient');
+    const result = await getTrainingNeedsFromPostgres();
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }
+
+  return Object.values(getTrainingNeeds()).flatMap((schoolData) => schoolData.bedarf);
+}
+
+export async function getTrainingNeedsAsync(): Promise<Record<string, SchoolFortbildungen>> {
+  const needs = await getAllTrainingNeedEntriesAsync();
+  const map: Record<string, SchoolFortbildungen> = {};
+
+  SCHULEN.forEach((school) => {
+    map[school.id] = { laufend: [], bedarf: [] };
+  });
+
+  needs.forEach((need) => {
+    const existing = map[need.schoolId] ?? { laufend: [], bedarf: [] };
+    map[need.schoolId] = { ...existing, bedarf: [...existing.bedarf, need] };
+  });
+
+  return map;
 }
 
 // Demo data stays the default until a real server/API data source is activated.

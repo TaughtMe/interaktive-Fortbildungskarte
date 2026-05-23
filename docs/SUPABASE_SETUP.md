@@ -1,13 +1,13 @@
 # Supabase-Testanbindung
 
 Stand: 2026-05-22  
-Status: Planung für eine spätere, bewusst freigegebene Testmigration. Diese Anleitung aktiviert keine Supabase-Verbindung und enthält keine echten Zugangsdaten.
+Status: Anleitung für den MVP-Testbetrieb mit bewusst freigegebener Supabase-Testdatenbank. Diese Datei enthält keine echten Zugangsdaten.
 
 Nicht im Rahmen dieses Dokuments automatisch ausführen: `npm run db:pg:migrate`, `npm run db:pg:seed`, `npm run db:migrate:local`.
 
 ## Ziel
 
-Die vorbereitete PostgreSQL-Migration unter `drizzle-pg/migrations/` soll später gegen eine isolierte Supabase-Testdatenbank angewendet werden. Die App bleibt bis dahin ohne aktive Supabase-Verbindung, ohne Supabase Auth und ohne produktive Datenbankpflicht.
+Die PostgreSQL-Migration unter `drizzle-pg/migrations/` wird gegen eine isolierte Supabase-Testdatenbank angewendet. Danach kann die App mit `DATA_SOURCE=postgres` und `NEXT_PUBLIC_USE_API=true` Schulen und Bedarfsmeldungen dauerhaft aus PostgreSQL lesen und neue Bedarfsmeldungen speichern. Supabase Auth bleibt deaktiviert.
 
 ## Voraussetzungen
 
@@ -69,11 +69,12 @@ Vor dem Anwenden der Migration:
 npm run db:pg:check
 ```
 
-## 4. Migration später anwenden
+## 4. Migration anwenden
 
 Erst nach ausdrücklicher Freigabe und nur mit lokaler `.env.local`:
 
 ```bash
+set -a && . ./.env.local && set +a
 npm run db:pg:migrate
 ```
 
@@ -132,7 +133,18 @@ select count(*) from schools;
 select count(*) from training_needs;
 ```
 
-## 7. Rollback und Reset für die Testdatenbank
+## 7. PostgreSQL als Datenquelle aktivieren
+
+Nach Migration und Seed kann der MVP im PostgreSQL-Modus gestartet werden:
+
+```bash
+set -a && . ./.env.local && set +a
+DATA_SOURCE=postgres NEXT_PUBLIC_USE_API=true npm run dev
+```
+
+In diesem Modus nutzt die UI die API-Routen. Die API liest `schools` und `training_needs` aus PostgreSQL und schreibt neue Bedarfsmeldungen in `training_needs`.
+
+## 8. Rollback und Reset für die Testdatenbank
 
 Für diese erste Testmigration ist kein automatischer produktiver Rollback-Prozess definiert. Für eine reine Testdatenbank gibt es zwei sichere Wege:
 
@@ -155,7 +167,7 @@ drop schema if exists drizzle cascade;
 
 Danach kann die Migration erneut mit `npm run db:pg:migrate` angewendet werden, sofern die Testumgebung erneut bestätigt wurde.
 
-## 8. DSGVO-Hinweis
+## 9. DSGVO-Hinweis
 
 Im Testbetrieb dürfen keine echten personenbezogenen Daten verarbeitet werden. Das gilt insbesondere für Namen, E-Mail-Adressen, Telefonnummern, Rollenbeziehungen, Schulzuordnungen, Audit-Einträge und Freitextfelder. Für Tests nur synthetische oder öffentlich unkritische Beispieldaten verwenden.
 

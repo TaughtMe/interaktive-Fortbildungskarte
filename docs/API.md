@@ -1,8 +1,6 @@
 # API
 
-Die API ist aktuell eine vorbereitete Server-Grenze im Mock-Betrieb. Sie nutzt die bestehenden Services und Repositories, aktiviert keine Supabase-/PostgreSQL-Verbindung und speichert neue Bedarfsmeldungen noch nicht dauerhaft.
-
-Später soll diese Grenze an Supabase/PostgreSQL angebunden werden. D1 bleibt nur eine Alternative.
+Die API ist die Server-Grenze für Schulen und Fortbildungsbedarfe. Standardmäßig nutzt sie weiterhin Mock-/Staticdaten. Mit `DATA_SOURCE=postgres` oder `APP_DATA_SOURCE=postgres` liest und schreibt sie über Supabase/PostgreSQL.
 
 ## UI-Datenmodus
 
@@ -16,16 +14,22 @@ NEXT_PUBLIC_USE_API=true npm run dev
 
 In diesem Modus lädt die UI Schulen über `GET /api/schools`, Fortbildungsbedarfe über `GET /api/training-needs` und sendet neue Bedarfsmeldungen über `POST /api/training-needs`.
 
-Wenn ein API-Fetch fehlschlägt oder eine unerwartete Antwort liefert, fällt die UI automatisch auf die bestehenden Mock-/Service-Daten zurück. Die API-Clients werfen keine unkontrollierten Fehler in die App, sondern liefern `{ ok: true, data }` oder `{ ok: false, error }`.
+Für dauerhafte PostgreSQL-Speicherung:
+
+```bash
+DATA_SOURCE=postgres NEXT_PUBLIC_USE_API=true npm run dev
+```
+
+Wenn ein API-Fetch fehlschlägt oder eine unerwartete Antwort liefert, fällt die UI beim initialen Laden auf bestehende Mock-/Service-Daten zurück. Beim Speichern einer Bedarfsmeldung zeigt die UI im Fehlerfall `Speichern fehlgeschlagen`.
 
 ## Endpunkte
 
 | Methode | Pfad | Zweck |
 |---|---|---|
-| `GET` | `/api/schools` | Gibt alle Schulen aus den aktuellen Mock-/Staticdaten zurueck. |
-| `GET` | `/api/schools/{id}` | Gibt eine einzelne Schule aus den aktuellen Mock-/Staticdaten zurueck. |
-| `GET` | `/api/training-needs` | Gibt alle Demo-/Mock-Bedarfsmeldungen zurueck. |
-| `POST` | `/api/training-needs` | Nimmt eine Bedarfsmeldung entgegen und erzeugt im aktuellen Mock-Modell ein Objekt ohne dauerhafte Persistenz. |
+| `GET` | `/api/schools` | Gibt alle Schulen zurück. Im PostgreSQL-Modus aus `schools`. |
+| `GET` | `/api/schools/{id}` | Gibt eine einzelne Schule zurück. Im PostgreSQL-Modus aus `schools`. |
+| `GET` | `/api/training-needs` | Gibt alle Bedarfsmeldungen zurück. Im PostgreSQL-Modus aus `training_needs`. |
+| `POST` | `/api/training-needs` | Validiert und erstellt eine Bedarfsmeldung. Im PostgreSQL-Modus dauerhaft in `training_needs`. |
 
 ## Beispiel: Bedarfsmeldung erstellen
 
@@ -57,9 +61,8 @@ Alle Felder im Beispiel sind erforderlich.
 ## Sicherheit und Betrieb
 
 - Mock-/Staticdaten bleiben Standard.
-- `NEXT_PUBLIC_USE_API=true` aktiviert nur den API-Fetch der UI; die API selbst nutzt aktuell weiterhin Mock-/Service-Daten.
-- PostgreSQL/Supabase ist vorbereitet, aber nicht aktiv angebunden.
+- PostgreSQL/Supabase wird nur mit `DATA_SOURCE=postgres` oder `APP_DATA_SOURCE=postgres` aktiv.
 - Es gibt noch keine Authentifizierung.
 - Die API ist deshalb nicht produktiv geschuetzt.
 - Keine Sessions, Cookies oder Passwoerter werden verwendet.
-- Keine echte Datenbankverbindung, keine Migration und kein Seed sind Teil dieses Stands.
+- Migration und Seed werden nur bewusst gegen eine isolierte Testdatenbank ausgefuehrt.

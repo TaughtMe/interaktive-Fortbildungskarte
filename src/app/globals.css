@@ -408,6 +408,11 @@ input, select, textarea { font-family: inherit; }
 .tnf-field textarea { resize: vertical; min-height: 52px; }
 .tnf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tnf-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.tnf-message {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
 [data-theme="dark"] .tnf-field input,
 [data-theme="dark"] .tnf-field textarea,
 [data-theme="dark"] .tnf-field select { background: var(--surface-2); border-color: var(--border-2); }

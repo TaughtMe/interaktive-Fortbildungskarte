@@ -6,7 +6,7 @@ export function getAllSchools(): School[] {
 }
 
 export async function getAllSchoolsAsync(): Promise<School[]> {
-  return getAllSchools();
+  return schoolRepo.getAllSchoolsAsync();
 }
 
 export function getSchoolById(id: string): School | undefined {
@@ -14,7 +14,7 @@ export function getSchoolById(id: string): School | undefined {
 }
 
 export async function getSchoolByIdAsync(id: string): Promise<School | undefined> {
-  return getSchoolById(id);
+  return schoolRepo.getSchoolByIdAsync(id);
 }
 
 export function getSchoolsByType(typ: SchoolTypKey): School[] {

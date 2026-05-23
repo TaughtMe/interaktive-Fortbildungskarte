@@ -26,6 +26,8 @@ const EMPTY_FORM = {
 export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: Props) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   function set<K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -33,27 +35,41 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.topic.trim()) return;
-    const need = await onCreateNeed(schoolId, {
-      topic:           form.topic.trim(),
-      description:     form.description.trim(),
-      priority:        form.priority,
-      targetGroup:     form.targetGroup.trim(),
-      preferredFormat: form.preferredFormat,
-    });
-    onSubmit(need);
-    setForm(EMPTY_FORM);
-    setOpen(false);
+    if (!form.topic.trim() || !form.description.trim() || !form.targetGroup.trim()) return;
+
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      const need = await onCreateNeed(schoolId, {
+        topic:           form.topic.trim(),
+        description:     form.description.trim(),
+        priority:        form.priority,
+        targetGroup:     form.targetGroup.trim(),
+        preferredFormat: form.preferredFormat,
+      });
+      onSubmit(need);
+      setForm(EMPTY_FORM);
+      setOpen(false);
+      setMessage('Bedarf wurde gespeichert');
+    } catch {
+      setMessage('Speichern fehlgeschlagen');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!open) {
     return (
-      <button className="btn" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <path d="M8 3 V13 M3 8 H13" strokeLinecap="round" />
-        </svg>
-        Bedarf melden
-      </button>
+      <>
+        <button className="btn" style={{ marginTop: 8 }} onClick={() => { setOpen(true); setMessage(null); }}>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d="M8 3 V13 M3 8 H13" strokeLinecap="round" />
+          </svg>
+          Bedarf melden
+        </button>
+        {message && <div className="tnf-message">{message}</div>}
+      </>
     );
   }
 
@@ -76,6 +92,7 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
         <label>Kurze Beschreibung</label>
         <textarea
           rows={2}
+          required
           placeholder="Was genau wird benötigt? Für wen?"
           value={form.description}
           onChange={(e) => set('description', e.target.value)}
@@ -112,6 +129,7 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
         <label>Zielgruppe</label>
         <input
           type="text"
+          required
           placeholder="z. B. Alle Lehrkräfte, Schulleitung, Jgst. 1–4 …"
           value={form.targetGroup}
           onChange={(e) => set('targetGroup', e.target.value)}
@@ -119,16 +137,17 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
       </div>
 
       <div className="tnf-actions">
-        <button type="button" className="btn" onClick={() => { setOpen(false); setForm(EMPTY_FORM); }}>
+        <button type="button" className="btn" disabled={isSaving} onClick={() => { setOpen(false); setForm(EMPTY_FORM); }}>
           Abbrechen
         </button>
-        <button type="submit" className="btn primary">
+        <button type="submit" className="btn primary" disabled={isSaving}>
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
             <path d="M3 8 L7 12 L13 4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Melden
+          {isSaving ? 'Speichert …' : 'Melden'}
         </button>
       </div>
+      {message && <div className="tnf-message">{message}</div>}
     </form>
   );
 }

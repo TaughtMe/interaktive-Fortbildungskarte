@@ -1,9 +1,11 @@
-export type DataSource = 'mock' | 'd1';
+export type DataSource = 'mock' | 'd1' | 'postgres';
 
 const DEFAULT_DATA_SOURCE: DataSource = 'mock';
 
 function normalizeDataSource(value: string | undefined): DataSource {
-  return value === 'd1' ? 'd1' : DEFAULT_DATA_SOURCE;
+  if (value === 'postgres') return 'postgres';
+  if (value === 'd1') return 'd1';
+  return DEFAULT_DATA_SOURCE;
 }
 
 function readConfiguredDataSource(): string | undefined {
@@ -23,4 +25,8 @@ export function getDataSource(): DataSource {
 
 export function isD1DataSource(): boolean {
   return getDataSource() === 'd1';
+}
+
+export function isPostgresDataSource(): boolean {
+  return getDataSource() === 'postgres';
 }

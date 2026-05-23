@@ -13,7 +13,7 @@ export async function createTrainingNeedAsync(
   schoolId: string,
   partial: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
 ): Promise<TrainingNeed> {
-  return createTrainingNeed(schoolId, partial);
+  return trainingNeedRepo.createTrainingNeedAsync(schoolId, partial);
 }
 
 export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
@@ -21,7 +21,7 @@ export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
 }
 
 export async function getTrainingNeedsAsync(): Promise<Record<string, SchoolFortbildungen>> {
-  return getTrainingNeeds();
+  return trainingNeedRepo.getTrainingNeedsAsync();
 }
 
 export function getAllTrainingNeedEntries(): TrainingNeed[] {
@@ -29,7 +29,7 @@ export function getAllTrainingNeedEntries(): TrainingNeed[] {
 }
 
 export async function getAllTrainingNeedEntriesAsync(): Promise<TrainingNeed[]> {
-  return getAllTrainingNeedEntries();
+  return trainingNeedRepo.getAllTrainingNeedEntriesAsync();
 }
 
 // Demo data initializer — call once for the initial React state.

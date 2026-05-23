@@ -5,9 +5,7 @@ import type { School, SchoolTypKey, MarkerStyle, Theme, DetailState, SchoolFortb
 import type { Role } from '@/types/auth';
 import type { TrainingNeed } from '@/types/trainingNeed';
 import { DEMO_USERS } from '@/types/auth';
-import { SCHULTYPEN } from '@/data/schools';
-import * as schoolService from '@/lib/services/schoolService';
-import * as trainingNeedService from '@/lib/services/trainingNeedService';
+import { FORTBILDUNGEN_DEFAULT, SCHULEN, SCHULTYPEN } from '@/data/schools';
 import { fetchSchools } from '@/lib/api/schoolsApi';
 import { createTrainingNeedViaApi, fetchTrainingNeeds } from '@/lib/api/trainingNeedsApi';
 import { isApiModeEnabled } from '@/lib/config/runtimeMode';
@@ -21,6 +19,34 @@ import AdminDashboard from '@/components/dashboard/AdminDashboard';
 import LeadershipDashboard from '@/components/dashboard/LeadershipDashboard';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
+
+function createMockTrainingNeed(
+  schoolId: string,
+  input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+): TrainingNeed {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    schoolId,
+    createdAt: now,
+    updatedAt: now,
+    ...input,
+  };
+}
+
+function initializeDemoData(): Record<string, SchoolFortbildungen> {
+  const map: Record<string, SchoolFortbildungen> = {};
+  SCHULEN.forEach((school, index) => {
+    if (index % 3 === 0) {
+      map[school.id] = JSON.parse(JSON.stringify(FORTBILDUNGEN_DEFAULT));
+    } else if (index % 5 === 0) {
+      map[school.id] = { laufend: [FORTBILDUNGEN_DEFAULT.laufend[0]], bedarf: [] };
+    } else {
+      map[school.id] = { laufend: [], bedarf: [] };
+    }
+  });
+  return map;
+}
 
 // ── Viewport detection ────────────────────────────────────────────────────────
 
@@ -88,12 +114,12 @@ export default function Home() {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [schools, setSchools] = useState<School[]>(() => schoolService.getAllSchools());
+  const [schools, setSchools] = useState<School[]>(SCHULEN);
   const useApi = isApiModeEnabled();
 
   // Mock data remains the default. Optional API mode only hydrates over it.
   const [fortbildungen, setFortbildungen] = useState<Record<string, SchoolFortbildungen>>(
-    trainingNeedService.initializeDemoData
+    initializeDemoData
   );
 
   // Apply theme to <html>
@@ -210,17 +236,16 @@ export default function Home() {
     schoolId: string,
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
   ) {
-    if (!useApi) return trainingNeedService.createTrainingNeed(schoolId, input);
+    if (!useApi) return createMockTrainingNeed(schoolId, input);
 
     const result = await createTrainingNeedViaApi(schoolId, input);
     if (result.ok) return result.data;
 
-    console.warn('API create training need fallback:', result.error);
-    return trainingNeedService.createTrainingNeed(schoolId, input);
+    throw new Error(result.error.message);
   }
 
   const compareSchools = compareIds
-    .map((id) => schools.find((s) => s.id === id) ?? schoolService.getSchoolById(id))
+    .map((id) => schools.find((s) => s.id === id) ?? SCHULEN.find((s) => s.id === id))
     .filter((s): s is School => Boolean(s));
 
   const visibleTabs = getTabsForRole(role);
@@ -230,7 +255,7 @@ export default function Home() {
 
   const demoUser = DEMO_USERS[role];
   const mySchool = demoUser.schoolId
-    ? schools.find((s) => s.id === demoUser.schoolId) ?? schoolService.getSchoolById(demoUser.schoolId) ?? null
+    ? schools.find((s) => s.id === demoUser.schoolId) ?? SCHULEN.find((s) => s.id === demoUser.schoolId) ?? null
     : null;
   const myFortbildungen = mySchool ? (fortbildungen[mySchool.id] ?? { laufend: [], bedarf: [] }) : null;
 
