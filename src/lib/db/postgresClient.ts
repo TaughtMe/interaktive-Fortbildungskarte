@@ -1,11 +1,12 @@
 import type { School } from '@/types';
 import type { TrainingNeed } from '@/types/trainingNeed';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { verifySchoolCode } from '@/lib/auth/schoolCodeAuth';
 import { mapSchoolRowToSchool } from './mappers/schoolMapper';
 import { mapTrainingNeedRowToTrainingNeed } from './mappers/trainingNeedMapper';
-import { schools, trainingNeeds } from './schema.pg';
+import { schoolAccessCodes, schools, trainingNeeds } from './schema.pg';
 
 export type PostgresAdapterResult<T> =
   | { ok: true; data: T }
@@ -147,6 +148,76 @@ export async function createTrainingNeedInPostgres(
     }
 
     return { ok: true, data: mapTrainingNeedRowToTrainingNeed(row) };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  } finally {
+    await client.end();
+  }
+}
+
+export async function createTrainingNeedWithSchoolCodeInPostgres(
+  schoolId: string,
+  schoolCode: string,
+  input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+): Promise<PostgresAdapterResult<TrainingNeed>> {
+  const { client, db } = getPostgresClient();
+  const now = new Date();
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const codeRows = await tx
+        .select()
+        .from(schoolAccessCodes)
+        .where(
+          and(
+            eq(schoolAccessCodes.school_id, schoolId),
+            eq(schoolAccessCodes.active, 1),
+            or(isNull(schoolAccessCodes.expires_at), gt(schoolAccessCodes.expires_at, now)),
+          ),
+        );
+
+      const matchingCode = await codeRows.reduce<Promise<typeof codeRows[number] | undefined>>(
+        async (previousMatch, codeRow) => {
+          const existingMatch = await previousMatch;
+          if (existingMatch) return existingMatch;
+          return (await verifySchoolCode(schoolCode, codeRow.code_hash)) ? codeRow : undefined;
+        },
+        Promise.resolve(undefined),
+      );
+
+      if (!matchingCode) return null;
+
+      const [row] = await tx
+        .insert(trainingNeeds)
+        .values({
+          id: crypto.randomUUID(),
+          school_id: schoolId,
+          created_by: null,
+          topic: input.topic,
+          description: input.description,
+          priority: input.priority,
+          target_group: input.targetGroup,
+          preferred_format: input.preferredFormat,
+          status: input.status ?? 'open',
+          created_at: now,
+          updated_at: now,
+        })
+        .returning();
+
+      if (!row) {
+        throw new Error('PostgreSQL did not return the created training need.');
+      }
+
+      await tx
+        .update(schoolAccessCodes)
+        .set({ last_used_at: now, updated_at: now })
+        .where(eq(schoolAccessCodes.id, matchingCode.id));
+
+      return mapTrainingNeedRowToTrainingNeed(row);
+    });
+
+    if (!result) return { ok: false, error: 'INVALID_SCHOOL_ACCESS_CODE' };
+    return { ok: true, data: result };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   } finally {

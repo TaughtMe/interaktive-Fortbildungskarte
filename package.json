@@ -16,7 +16,8 @@
     "db:pg:generate": "drizzle-kit generate --config=drizzle.pg.config.ts",
     "db:pg:check": "drizzle-kit check --config=drizzle.pg.config.ts",
     "db:pg:migrate": "drizzle-kit migrate --config=drizzle.pg.config.ts",
-    "db:pg:seed": "echo 'ACHTUNG: Seed veraendert die PostgreSQL-Testdatenbank. Nur mit bewusst gesetzter DATABASE_URL und SEED_PG_CONFIRM=seed-test-postgres nutzen.' && tsx scripts/seed-pg.ts"
+    "db:pg:seed": "echo 'ACHTUNG: Seed veraendert die PostgreSQL-Testdatenbank. Nur mit bewusst gesetzter DATABASE_URL und SEED_PG_CONFIRM=seed-test-postgres nutzen.' && tsx scripts/seed-pg.ts",
+    "db:pg:seed:school-codes": "echo 'ACHTUNG: Erstellt lokale Test-Zugriffscodes fuer Schulen. Nur mit bewusst gesetzter DATABASE_URL und SEED_SCHOOL_CODES_CONFIRM=seed-school-codes nutzen.' && tsx scripts/seed-school-codes.ts"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",

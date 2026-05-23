@@ -70,6 +70,21 @@ export const sessions = pgTable('sessions', {
   index('pg_sessions_expires_at_idx').on(table.expires_at),
 ]);
 
+export const schoolAccessCodes = pgTable('school_access_codes', {
+  id: text('id').primaryKey(),
+  school_id: text('school_id').notNull().references(() => schools.id),
+  code_hash: text('code_hash').notNull(),
+  label: text('label'),
+  active: integer('active').notNull().default(1),
+  expires_at: timestamp('expires_at', { withTimezone: true }),
+  last_used_at: timestamp('last_used_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_school_access_codes_school_id_idx').on(table.school_id),
+  index('pg_school_access_codes_active_idx').on(table.active),
+]);
+
 export const trainingNeeds = pgTable('training_needs', {
   id: text('id').primaryKey(),
   school_id: text('school_id').notNull().references(() => schools.id),
@@ -128,6 +143,8 @@ export type PgUserSelect = typeof users.$inferSelect;
 export type PgUserInsert = typeof users.$inferInsert;
 export type PgSessionSelect = typeof sessions.$inferSelect;
 export type PgSessionInsert = typeof sessions.$inferInsert;
+export type PgSchoolAccessCodeSelect = typeof schoolAccessCodes.$inferSelect;
+export type PgSchoolAccessCodeInsert = typeof schoolAccessCodes.$inferInsert;
 export type PgTrainingNeedSelect = typeof trainingNeeds.$inferSelect;
 export type PgTrainingNeedInsert = typeof trainingNeeds.$inferInsert;
 export type PgTrainingOfferSelect = typeof trainingOffers.$inferSelect;

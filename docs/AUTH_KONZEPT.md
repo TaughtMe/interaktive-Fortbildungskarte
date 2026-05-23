@@ -1,7 +1,7 @@
 # Auth-Konzept fuer den Pilotbetrieb
 
 Stand: 2026-05-23  
-Status: Planung und technische Vorbereitung. Keine produktive Authentifizierung aktiv.
+Status: Pilotloesung fuer Schul-Zugriffscodes vorbereitet. Keine produktive Benutzer-Authentifizierung aktiv.
 
 ## Zielbild
 
@@ -15,6 +15,7 @@ Nicht Teil dieses Schritts:
 - Keine echten personenbezogenen Daten anlegen.
 - Keine produktive Authentifizierung aktivieren.
 - Keine vollstaendige Benutzerverwaltung bauen.
+- Keine Supabase Auth, Sessions, Cookies oder Nutzerpasswoerter einfuehren.
 
 ## Bestehender Stand
 
@@ -28,6 +29,7 @@ Die aktuelle App hat Rollen, aber noch keine echte Authentifizierung.
 - API-Routen koennen im Entwicklungsmodus Demo-Rollen ueber `X-Demo-Role` oder `demoRole` auswerten.
 - `resolveDemoAccessUserFromRequest()` gibt in `NODE_ENV=production` immer `null` zurueck.
 - Ohne echten User sind die API-Routen derzeit kompatibel offen, damit Mock-/API-Modus weiter funktionieren.
+- `POST /api/training-needs` verlangt jetzt zusaetzlich `schoolCode`. Im PostgreSQL-Modus wird dieser Code schulgebunden, aktiv und nicht abgelaufen gegen `school_access_codes.code_hash` geprueft.
 
 Vorbereitete Rollen:
 
@@ -94,21 +96,34 @@ Nachteile:
 
 Einschaetzung: Empfohlen als begrenzter Pilot-Zugang fuer Schulen, aber nur fuer Bedarfsmeldungen und nicht fuer Dashboards, Exporte oder Verwaltungsfunktionen.
 
-## Empfehlung fuer den Pilotbetrieb
+## Aktuelle Pilotentscheidung
+
+Fuer diesen Schritt wird nur der Schul-Zugriffscode umgesetzt:
+
+1. Schulen koennen Bedarfsmeldungen nur mit `schoolId` plus gueltigem `schoolCode` absenden.
+2. Codes werden normalisiert, mit Node-crypto/scrypt plus Salt gehasht und nie im Klartext in PostgreSQL gespeichert.
+3. Gueltige Codes sind an genau eine Schule gebunden und koennen deaktiviert oder mit `expires_at` befristet werden.
+4. Bei erfolgreicher Bedarfsmeldung wird `last_used_at` aktualisiert.
+5. Es entstehen keine Sessions, Cookies, Passwoerter oder Supabase-Auth-Abhaengigkeiten.
+6. Koordination, Bezirksadmin und Superadmin bleiben Demo-/Vorbereitungsrollen.
+
+Die scrypt-basierte Loesung ist fuer den Pilotbetrieb gedacht. Vor einem produktiven Rollout sollten Parameter, Rotation, Rate-Limits und ein Betriebskonzept erneut geprueft werden.
+
+## Zielbild nach dem Pilotbetrieb
 
 Empfohlen ist ein hybrides Minimalmodell:
 
-1. Superadmin, Bezirksadmin und Koordination nutzen Supabase Auth.
+1. Superadmin, Bezirksadmin und Koordination koennen spaeter eine echte Authentifizierung nutzen.
 2. Die eigene `users`-Tabelle bleibt die fachliche Rollen- und Zuordnungstabelle.
 3. Schulen melden Bedarf mit einem schulgebundenen Zugriffscode statt mit eigenem Login.
 4. Die bestehende `accessControl`-Logik bleibt unveraendert die zentrale Autorisierungsquelle.
-5. API-Routen bekommen spaeter eine echte Serverfunktion `resolveAccessUserFromRequest(request)`, die zuerst Supabase-Session/JWT und danach optional Schulcode prueft.
+5. API-Routen bekommen spaeter eine echte Serverfunktion `resolveAccessUserFromRequest(request)`, die eine echte Login-Identitaet und danach optional Schulcode prueft.
 
 Die Demo-Rollenlogik wird nicht geloescht. Sie bleibt nur fuer Entwicklung und Vorschau erhalten.
 
 ## Vorgeschlagenes Datenmodell
 
-Keine Migration in diesem Schritt. Fuer PostgreSQL wird spaeter eine separate Tabelle `school_access_codes` empfohlen statt einer Erweiterung der `users`-Tabelle.
+Fuer PostgreSQL gibt es eine separate Tabelle `school_access_codes` statt einer Erweiterung der `users`-Tabelle.
 
 Begruendung:
 
@@ -125,8 +140,8 @@ Geplante Tabelle:
 | `school_id` | text | ja | FK -> `schools.id` |
 | `code_hash` | text | ja | Hash des Zugriffscodes, nie Klartext speichern |
 | `label` | text | nein | Interne Bezeichnung, z. B. `Pilotcode Mai 2026` |
+| `active` | integer | ja | `1` aktiv, `0` deaktiviert |
 | `expires_at` | timestamptz | nein | Ablaufdatum fuer Rotation |
-| `revoked_at` | timestamptz | nein | Manuelle Sperre |
 | `last_used_at` | timestamptz | nein | Missbrauchs- und Betriebsanalyse ohne PII |
 | `created_at` | timestamptz | ja | Anlagezeitpunkt |
 | `updated_at` | timestamptz | ja | Aenderungszeitpunkt |
@@ -134,8 +149,7 @@ Geplante Tabelle:
 Empfohlene Indizes:
 
 - `school_access_codes_school_id_idx` auf `school_id`
-- `school_access_codes_expires_at_idx` auf `expires_at`
-- Optional ein partieller Index fuer aktive Codes, falls benoetigt.
+- `school_access_codes_active_idx` auf `active`
 
 Nicht speichern:
 
@@ -158,8 +172,8 @@ resolveAccessUserFromRequest(request): Promise<AccessUser>
 
 Reihenfolge:
 
-1. Supabase Auth Session/JWT pruefen.
-2. `auth.users.id` auf eigene `users.id` oder `users.auth_user_id` mappen.
+1. Echte Login-Identitaet pruefen.
+2. Login-ID auf eigene `users.id` oder eine spaetere Auth-ID mappen.
 3. Rolle, `district_id` und `school_id` aus eigener `users`-Tabelle lesen.
 4. Falls keine Login-Session vorhanden ist: Schulcode aus Request pruefen.
 5. Gueltiger Schulcode wird als eingeschraenkter `school_user` fuer genau diese Schule behandelt.

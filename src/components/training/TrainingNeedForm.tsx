@@ -9,6 +9,7 @@ interface Props {
   onCreateNeed: (
     schoolId: string,
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+    schoolCode: string,
   ) => Promise<TrainingNeed> | TrainingNeed;
 }
 
@@ -21,6 +22,7 @@ const EMPTY_FORM = {
   priority:        'mittel' as TrainingNeedPriority,
   targetGroup:     '',
   preferredFormat: 'praesenz' as TrainingNeedFormat,
+  schoolCode:      '',
 };
 
 export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: Props) {
@@ -35,7 +37,7 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.topic.trim() || !form.description.trim() || !form.targetGroup.trim()) return;
+    if (!form.topic.trim() || !form.description.trim() || !form.targetGroup.trim() || !form.schoolCode.trim()) return;
 
     setIsSaving(true);
     setMessage(null);
@@ -47,13 +49,14 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
         priority:        form.priority,
         targetGroup:     form.targetGroup.trim(),
         preferredFormat: form.preferredFormat,
-      });
+      }, form.schoolCode);
       onSubmit(need);
       setForm(EMPTY_FORM);
       setOpen(false);
       setMessage('Bedarf wurde gespeichert');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Speichern fehlgeschlagen');
+      const message = error instanceof Error ? error.message : 'Speichern fehlgeschlagen';
+      setMessage(message.includes('Invalid or expired school access code') ? 'Der Zugriffscode ist ungültig oder abgelaufen.' : message);
     } finally {
       setIsSaving(false);
     }
@@ -134,6 +137,19 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
           value={form.targetGroup}
           onChange={(e) => set('targetGroup', e.target.value)}
         />
+      </div>
+
+      <div className="tnf-field">
+        <label>Schul-Zugriffscode *</label>
+        <input
+          type="text"
+          required
+          autoComplete="off"
+          placeholder="Zugriffscode eingeben"
+          value={form.schoolCode}
+          onChange={(e) => set('schoolCode', e.target.value)}
+        />
+        <small>Den Zugriffscode erhält die Schule vom Schulamt.</small>
       </div>
 
       <div className="tnf-actions">

@@ -59,6 +59,14 @@ DATA_SOURCE=postgres NEXT_PUBLIC_USE_API=true npm run dev
 
 In diesem Modus laden `GET /api/schools` und `GET /api/training-needs` aus PostgreSQL. `POST /api/training-needs` speichert neue Bedarfsmeldungen dauerhaft.
 
+Bedarfsmeldungen per API/Formular benoetigen jetzt einen schulgebundenen Zugriffscode. Die Codes werden nicht im Klartext gespeichert, sondern als Hash in `school_access_codes`. Fuer lokale Tests kann nach ausdruecklicher Freigabe ein manueller Seed ausgefuehrt werden:
+
+```bash
+SEED_SCHOOL_CODES_CONFIRM=seed-school-codes npm run db:pg:seed:school-codes
+```
+
+Der Befehl ist nicht Teil von `npm run verify`, erzeugt nur Testcodes und gibt diese einmalig lokal aus. Keine Zugriffscodes in Git, Doku, Tickets oder Commits uebernehmen.
+
 Das Koordinationsdashboard zeigt alle Bedarfsmeldungen mit Schule, Ort, Schulart, Beschreibung, Zielgruppe, Datum, Format und Priorität. Es kann nach Thema, Priorität, Schulart und Ort gefiltert sowie nach Datum oder Priorität sortiert werden. Der CSV-Export ist über `GET /api/training-needs/export` vorbereitet und enthält nur fachliche Bedarfsdaten: Schule, Ort, Schulart, Thema, Beschreibung, Priorität, Zielgruppe, Format und Datum.
 
 Das Leadership-Dashboard zeigt Anzahl der Schulen, Anzahl der Bedarfsmeldungen, häufigste Themen und Prioritätsverteilung.
@@ -110,12 +118,15 @@ npm run verify
 | `npm run db:pg:migrate` | Wendet PostgreSQL-Migrationen gegen `DATABASE_URL` an. | Nicht automatisch ausführen. |
 | `npm run db:migrate:local` | Wendet D1-Migrationen lokal über Wrangler an. | Nicht automatisch ausführen. |
 | `npm run db:pg:seed` | Schreibt Demo-Daten in eine PostgreSQL-Testdatenbank. | Gefährlich; nur nach bewusster Freigabe und nie mit echten personenbezogenen Daten. |
+| `npm run db:pg:seed:school-codes` | Erstellt Test-Zugriffscodes fuer Schulen. | Gefaehrlich; nur mit `SEED_SCHOOL_CODES_CONFIRM=seed-school-codes`, Ausgabe nicht speichern oder committen. |
 
 ## Datenbankstrategie
 
 Supabase/PostgreSQL ist die bevorzugte Richtung. Dafür liegen `src/lib/db/schema.pg.ts`, `src/lib/db/postgresClient.ts`, `drizzle.pg.config.ts` und `drizzle-pg/migrations/` vor. Ohne lokal gesetzte `DATABASE_URL` und ohne `DATA_SOURCE=postgres` wird keine echte Verbindung für die API erwartet.
 
 Die aktuelle PostgreSQL-Struktur enthaelt `districts`, `schools.district_id` und `users.district_id`/`users.school_id`. Bezirksgrenzen koennen spaeter als GeoJSON in `districts.boundary_geojson` gespeichert und mit `DistrictBoundaryLayer` auf der Leaflet-Karte angezeigt werden.
+
+Fuer den Pilotbetrieb gibt es zusaetzlich `school_access_codes`. Diese Tabelle speichert nur Hashes schulgebundener Zugriffscodes fuer `POST /api/training-needs`. Es gibt weiterhin keine Supabase Auth, keine Sessions, keine Cookies und keine Nutzerpasswoerter.
 
 D1 bleibt als vorbereitete Alternative im Projekt: `src/lib/db/schema.ts`, `drizzle.config.ts`, `drizzle/migrations/` und `wrangler.toml`. Diese Richtung ist dokumentiert, aber aktuell nicht bevorzugt.
 

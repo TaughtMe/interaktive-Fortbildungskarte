@@ -16,6 +16,14 @@ export async function createTrainingNeedAsync(
   return trainingNeedRepo.createTrainingNeedAsync(schoolId, partial);
 }
 
+export async function createTrainingNeedWithSchoolCodeAsync(
+  schoolId: string,
+  schoolCode: string,
+  partial: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+): Promise<TrainingNeed> {
+  return trainingNeedRepo.createTrainingNeedWithSchoolCodeAsync(schoolId, schoolCode, partial);
+}
+
 export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
   return trainingNeedRepo.getTrainingNeeds();
 }

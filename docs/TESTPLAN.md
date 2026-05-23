@@ -43,12 +43,12 @@ Erwartung: Detailansicht, Vergleichsleiste und Modal bleiben stabil.
 
 1. Detailansicht einer Schule oeffnen.
 2. "Bedarf melden" oeffnen.
-3. Thema, Beschreibung, Zielgruppe, Prioritaet und Format ausfuellen.
+3. Thema, Beschreibung, Zielgruppe, Prioritaet, Format und Schul-Zugriffscode ausfuellen.
 4. Meldung absenden.
 5. Bedarf in der Detailansicht pruefen.
 6. Bedarf wieder entfernen.
 
-Erwartung: Im Mock-Modus wird lokal ein Bedarf angelegt. Im API-Modus wird zuerst `POST /api/training-needs` genutzt; bei Fehler bleibt der lokale Mock-Fallback aktiv.
+Erwartung: Im Mock-Modus wird lokal ein Bedarf angelegt, solange ein nichtleerer Code eingegeben wurde. Im PostgreSQL-API-Modus wird `POST /api/training-needs` nur mit gueltigem schulgebundenem Code gespeichert. Falsche oder abgelaufene Codes zeigen "Der Zugriffscode ist ungültig oder abgelaufen."
 
 ## Rollenwechsel
 
@@ -112,6 +112,7 @@ curl -X POST http://localhost:3000/api/training-needs \
   -H "X-Demo-Role: school_user" \
   -d '{
     "schoolId": "bb-gs",
+    "schoolCode": "<nicht-versionierter-testcode>",
     "topic": "Digitale Unterrichtsgestaltung",
     "description": "Synthetischer Testbedarf ohne personenbezogene Daten.",
     "priority": "mittel",
@@ -125,13 +126,14 @@ Negativtests:
 ```bash
 curl -X POST http://localhost:3000/api/training-needs \
   -H "Content-Type: application/json" \
-  -d '{"schoolId":"","topic":"","description":"","priority":"falsch","targetGroup":"","preferredFormat":"falsch"}'
+  -d '{"schoolId":"","schoolCode":"","topic":"","description":"","priority":"falsch","targetGroup":"","preferredFormat":"falsch"}'
 
 curl -X POST http://localhost:3000/api/training-needs \
   -H "Content-Type: application/json" \
   -H "X-Demo-Role: viewer" \
   -d '{
     "schoolId": "bb-gs",
+    "schoolCode": "<nicht-versionierter-testcode>",
     "topic": "Nicht erlaubt",
     "description": "Synthetischer Negativtest.",
     "priority": "mittel",
@@ -140,7 +142,19 @@ curl -X POST http://localhost:3000/api/training-needs \
   }'
 ```
 
-Erwartung: Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error": "..." }`. Der Export liefert `text/csv` mit den dokumentierten Spalten. Unbekannte Schule bei `GET /api/schools/{id}` liefert 404; ungueltige Bedarfsmeldungen liefern 400; im Demo-Kontext nicht erlaubte Aktionen liefern 403.
+Zusaetzliche PostgreSQL-Pilotpruefungen nach ausdruecklicher Freigabe fuer Migration und Testcode-Seed:
+
+```bash
+curl -X POST http://localhost:3000/api/training-needs \
+  -H "Content-Type: application/json" \
+  -d '{"schoolId":"bb-gs","topic":"Test","description":"Ohne Code","priority":"mittel","targetGroup":"Lehrkraefte","preferredFormat":"online"}'
+
+curl -X POST http://localhost:3000/api/training-needs \
+  -H "Content-Type: application/json" \
+  -d '{"schoolId":"bb-gs","schoolCode":"FALSCH","topic":"Test","description":"Falscher Code","priority":"mittel","targetGroup":"Lehrkraefte","preferredFormat":"online"}'
+```
+
+Erwartung: Ohne Code `400`, falscher/deaktivierter/abgelaufener Code `403`, unbekannte Schule bei POST `404`, gueltiger Code `201`; danach zeigt `GET /api/training-needs` den neuen Bedarf. Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error": "..." }`. Der Export liefert `text/csv` mit den dokumentierten Spalten.
 
 ## Pruefbefehle
 
@@ -158,8 +172,9 @@ npm run verify
 ```bash
 npm run db:pg:migrate
 npm run db:pg:seed
+SEED_SCHOOL_CODES_CONFIRM=seed-school-codes npm run db:pg:seed:school-codes
 npm run db:migrate:local
 npm run db:generate
 ```
 
-`db:pg:migrate` und `db:pg:seed` nur nach ausdruecklicher Freigabe und nur gegen eine bestaetigte Testdatenbank verwenden. Keine `DATABASE_URL` fuer normale UI- und Smoke-Tests setzen.
+`db:pg:migrate`, `db:pg:seed` und `db:pg:seed:school-codes` nur nach ausdruecklicher Freigabe und nur gegen eine bestaetigte Testdatenbank verwenden. Keine `DATABASE_URL` fuer normale UI- und Smoke-Tests setzen. Zugriffscodes nicht in Git oder Doku uebernehmen.

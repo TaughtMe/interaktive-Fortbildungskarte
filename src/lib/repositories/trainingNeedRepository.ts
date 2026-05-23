@@ -53,6 +53,21 @@ export async function createTrainingNeedAsync(
   return createTrainingNeed(schoolId, partial);
 }
 
+export async function createTrainingNeedWithSchoolCodeAsync(
+  schoolId: string,
+  schoolCode: string,
+  partial: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+): Promise<TrainingNeed> {
+  if (isPostgresDataSource()) {
+    const { createTrainingNeedWithSchoolCodeInPostgres } = await import('@/lib/db/postgresClient');
+    const result = await createTrainingNeedWithSchoolCodeInPostgres(schoolId, schoolCode, partial);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }
+
+  return createTrainingNeed(schoolId, partial);
+}
+
 export async function getAllTrainingNeedEntriesAsync(): Promise<TrainingNeed[]> {
   if (isPostgresDataSource()) {
     const { getTrainingNeedsFromPostgres } = await import('@/lib/db/postgresClient');

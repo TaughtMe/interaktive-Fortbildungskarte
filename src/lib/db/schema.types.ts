@@ -71,6 +71,20 @@ export interface SessionRow {
   created_at: string;
 }
 
+// ── school_access_codes ───────────────────────────────────────────────────────
+// PostgreSQL pilot table only. Stores hashes, never plaintext access codes.
+export interface SchoolAccessCodeRow {
+  id:           string;
+  school_id:    string;
+  code_hash:    string;
+  label:        string | null;
+  active:       number;
+  expires_at:   string | null;
+  last_used_at: string | null;
+  created_at:   string;
+  updated_at:   string;
+}
+
 // ── training_needs ────────────────────────────────────────────────────────────
 // Future table: CREATE TABLE training_needs (id TEXT PRIMARY KEY, ...)
 // Relationships:

@@ -259,6 +259,7 @@ export default function Home() {
   async function createTrainingNeed(
     schoolId: string,
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+    schoolCode: string,
   ) {
     const school = schools.find((s) => s.id === schoolId) ?? SCHULEN.find((s) => s.id === schoolId);
     if (!canCreateTrainingNeed(demoUser, schoolId, school)) {
@@ -267,7 +268,7 @@ export default function Home() {
 
     if (!useApi) return createMockTrainingNeed(schoolId, input);
 
-    const result = await createTrainingNeedViaApi(schoolId, input, role);
+    const result = await createTrainingNeedViaApi(schoolId, input, schoolCode, role);
     if (result.ok) return result.data;
 
     throw new Error(result.error.message);

@@ -15,6 +15,7 @@ const VALID_FORMATS: TrainingNeedFormat[] = ['praesenz', 'online', 'schilf', 'be
 
 interface TrainingNeedRequestBody {
   schoolId?: unknown;
+  schoolCode?: unknown;
   topic?: unknown;
   description?: unknown;
   priority?: unknown;
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
 
   const errors: Record<string, string> = {};
   const schoolId = readRequiredString(body, 'schoolId', errors);
+  const schoolCode = readRequiredString(body, 'schoolCode', errors);
   const topic = readRequiredString(body, 'topic', errors);
   const description = readRequiredString(body, 'description', errors);
   const priority = readRequiredString(body, 'priority', errors);
@@ -135,7 +137,7 @@ export async function POST(request: Request) {
   if (!school) {
     return NextResponse.json(
       { error: 'Unknown schoolId' },
-      { status: 400 },
+      { status: 404 },
     );
   }
 
@@ -149,14 +151,21 @@ export async function POST(request: Request) {
   let trainingNeed;
 
   try {
-    trainingNeed = await trainingNeedService.createTrainingNeedAsync(schoolId!, {
+    trainingNeed = await trainingNeedService.createTrainingNeedWithSchoolCodeAsync(schoolId!, schoolCode!, {
       topic: topic!,
       description: description!,
       priority: validatedPriority,
       targetGroup: targetGroup!,
       preferredFormat: validatedPreferredFormat,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_SCHOOL_ACCESS_CODE') {
+      return NextResponse.json(
+        { error: 'Invalid or expired school access code' },
+        { status: 403 },
+      );
+    }
+
     return NextResponse.json(
       { error: 'Training need could not be created' },
       { status: 500 },

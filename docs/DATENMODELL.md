@@ -13,6 +13,7 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 | `schools`          | Mock (statisch)   | Alle Schulen des Schulamts                      |
 | `users`            | Noch nicht aktiv  | Angemeldete Nutzerinnen und Nutzer              |
 | `sessions`         | Noch nicht aktiv  | Nur Schema-Vorbereitung für spätere Sessions  |
+| `school_access_codes` | Pilot aktiv in PostgreSQL | Gehashte schulgebundene Zugriffscodes fuer Bedarfsmeldungen |
 | `training_needs`   | Mock (React-State)| Gemeldeter Fortbildungsbedarf pro Schule        |
 | `training_offers`  | Noch nicht aktiv  | Angebotene Fortbildungen als Antwort auf Bedarf |
 | `audit_logs`       | Noch nicht aktiv  | Protokoll aller Änderungsoperationen            |
@@ -90,6 +91,29 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 
 ---
 
+### school_access_codes
+
+| Feld | Typ | Pflicht | Hinweis |
+|---|---|---|---|
+| `id` | TEXT | ja | Interne Code-ID |
+| `school_id` | TEXT | ja | FK -> `schools.id` |
+| `code_hash` | TEXT | ja | Hash des Zugriffscodes; nie Klartext speichern |
+| `label` | TEXT NULL | nein | Interne Bezeichnung |
+| `active` | INTEGER | ja | `1` aktiv, `0` deaktiviert |
+| `expires_at` | TIMESTAMP NULL | nein | Ablaufzeitpunkt; NULL = kein Ablaufdatum gesetzt |
+| `last_used_at` | TIMESTAMP NULL | nein | Wird bei erfolgreicher Bedarfsmeldung aktualisiert |
+| `created_at` | TIMESTAMP | ja | PostgreSQL: timestamp with time zone |
+| `updated_at` | TIMESTAMP | ja | PostgreSQL: timestamp with time zone |
+
+Indizes:
+
+- `pg_school_access_codes_school_id_idx`
+- `pg_school_access_codes_active_idx`
+
+> **Aktuell:** Pilotloesung nur fuer `POST /api/training-needs` im PostgreSQL-Modus. Codes werden mit `src/lib/auth/schoolCodeAuth.ts` normalisiert und per Node-crypto/scrypt plus Salt gehasht. Es werden keine Klartext-Codes gespeichert, keine Sessions erzeugt und keine Cookies gesetzt.
+
+---
+
 ### training_needs
 
 | Feld               | Typ         | Pflicht | Hinweis                                           |
@@ -155,6 +179,7 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 districts ──< schools          (1 Bezirk : n Schulen, nullable in der Uebergangsphase)
 districts ──< users            (1 Bezirk : n Bezirksnutzer, nullable fuer Superadmin)
 schools   ──< training_needs   (1 Schule : n Bedarfe)
+schools   ──< school_access_codes (1 Schule : n gehashte Zugriffscodes)
 schools   ──< users            (1 Schule : n Nutzer mit Rolle 'school_user')
 users   ──< sessions           (1 User : n Sessions)
 training_needs >──< training_offers  (1 Bedarf : 0-n Angebote; oder Angebot ohne Bedarf)
@@ -188,7 +213,7 @@ Die verbindliche Rollenlogik fuer UI und vorbereitete API-Pruefpunkte liegt in `
 | Bedarfsmeldungen exportieren | `superadmin`; `district_admin`/`coordinator` im eigenen Bezirk |
 | Nur lesen | `viewer` im eigenen Bezirk |
 
-Im Demo-Modus werden diese Regeln frontendseitig sichtbar gemacht: Rollen ohne Berechtigung sehen Hinweise statt Formularen oder gesperrte Aktionen. API-Routen koennen im Entwicklungsmodus einen Demo-User ueber `X-Demo-Role` oder `demoRole` auswerten; das ist kein produktives Sicherheitsmodell.
+Im Demo-Modus werden diese Regeln frontendseitig sichtbar gemacht: Rollen ohne Berechtigung sehen Hinweise statt Formularen oder gesperrte Aktionen. API-Routen koennen im Entwicklungsmodus einen Demo-User ueber `X-Demo-Role` oder `demoRole` auswerten; das ist kein produktives Sicherheitsmodell. Unabhaengig davon verlangt die Bedarfsmeldung ein `schoolCode`; im PostgreSQL-Modus muss dieser Code gueltig, aktiv, nicht abgelaufen und an dieselbe Schule gebunden sein.
 
 ---
 
@@ -200,6 +225,7 @@ Im Demo-Modus werden diese Regeln frontendseitig sichtbar gemacht: Rollen ohne B
 | Fortbildungsbedarfe  | React-State, init aus `FORTBILDUNGEN_DEFAULT` | `SELECT * FROM training_needs WHERE school_id = ?` |
 | Laufende Fortbildungen | React-State (kein DB-Pendant)     | Künftig `training_offers` mit `status = 'confirmed'` |
 | Nutzer / Rollen      | `DEMO_USERS` in `src/types/auth.ts` | Späteres User-/Rollenmodell nach Auth-Entscheidung |
+| Schul-Zugriffscodes  | Nur manuell per Testseed in PostgreSQL | Spaeteres Admin-UI oder echte Auth-Abloesung |
 | Bezirke              | `DEMO_DISTRICTS` in `src/lib/districts/districtAssignments.ts` | `districts` |
 | Sessions             | Nicht vorhanden                     | Erst nach separatem Auth-/Session-Konzept |
 
@@ -212,7 +238,7 @@ Im Demo-Modus werden diese Regeln frontendseitig sichtbar gemacht: Rollen ohne B
 3. **D1-Alternative:** `src/lib/db/schema.ts` und `drizzle/migrations/` bleiben vorbereitet, aber nicht priorisiert
 4. **Repositories:** `src/lib/repositories/*.ts` markieren die späteren Server/API-Grenzen für echte DB-Zugriffe
 5. **State-Init:** Demo-Initialisierung bleibt aktiv, bis ein separater Server/API-Pfad bewusst gebaut wird
-6. **Auth:** Noch nicht produktiv umgesetzt; keine Sessions, Cookies, Passwörter oder Login-Logik
+6. **Auth:** Schul-Zugriffscode als Pilotloesung fuer Bedarfsmeldungen; keine Supabase Auth, Sessions, Cookies, Passwörter oder Login-Logik
 
 ## Aktueller Datenfluss und Mandantenstellen
 

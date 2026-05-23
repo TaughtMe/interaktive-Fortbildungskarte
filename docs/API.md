@@ -23,6 +23,8 @@ DATA_SOURCE=postgres NEXT_PUBLIC_USE_API=true npm run dev
 
 Wenn ein API-Fetch fehlschlägt oder eine unerwartete Antwort liefert, fällt die UI beim initialen Laden auf bestehende Mock-/Service-Daten zurück. Beim Speichern einer Bedarfsmeldung zeigt die UI im Fehlerfall `Speichern fehlgeschlagen`.
 
+`POST /api/training-needs` erwartet einen schulgebundenen `schoolCode`. Im PostgreSQL-Modus wird der Code gegen `school_access_codes` geprueft. Im Mock-Modus bleibt die lokale Demo-Bedarfsmeldung mit nichtleerem Code bedienbar, speichert aber keine Codes.
+
 ## Endpunkte
 
 | Methode | Pfad | Zweck |
@@ -113,6 +115,7 @@ Content-Type: application/json
 ```json
 {
   "schoolId": "schule-1",
+  "schoolCode": "<nicht-versionierter-testcode>",
   "topic": "Digitale Unterrichtsgestaltung",
   "description": "Fortbildungsbedarf fuer kollaborative Lernplattformen.",
   "priority": "mittel",
@@ -130,12 +133,24 @@ Erlaubte Werte:
 
 Alle Felder im Beispiel sind erforderlich.
 
+Fehlerfaelle fuer `POST /api/training-needs`:
+
+| Fall | Status |
+|---|---|
+| Fehlender `schoolCode` oder andere Pflichtfelder | `400` |
+| Unbekannte Schule | `404` |
+| Falscher, deaktivierter oder abgelaufener Zugriffscode | `403` |
+
+Bei Erfolg wird der Bedarf gespeichert, der verwendete Code mit `last_used_at` aktualisiert und der gespeicherte Bedarf mit Status `201` zurueckgegeben.
+
 ## Sicherheit und Betrieb
 
 - Mock-/Staticdaten bleiben Standard.
 - PostgreSQL/Supabase wird nur mit `DATA_SOURCE=postgres` oder `APP_DATA_SOURCE=postgres` aktiv.
 - Es gibt noch keine Authentifizierung.
 - Es gibt ein vorbereitetes Rollen-/Access-Control-Modell, aber keine erzwungene produktive Auth.
-- Die API ist deshalb nicht produktiv geschuetzt.
+- Bedarfsmeldungen sind im PostgreSQL-Modus durch schulgebundene Zugriffscodes als Pilotloesung geschuetzt.
+- Zugriffscodes werden nur gehasht gespeichert; Klartext-Codes gehoeren nicht in Git, README oder Tickets.
 - Keine Sessions, Cookies oder Passwoerter werden verwendet.
+- Supabase Auth ist nicht eingebaut.
 - Migration und Seed werden nur bewusst gegen eine isolierte Testdatenbank ausgefuehrt.

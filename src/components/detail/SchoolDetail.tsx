@@ -26,6 +26,7 @@ interface Props {
   onCreateTrainingNeed: (
     schoolId: string,
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+    schoolCode: string,
   ) => Promise<TrainingNeed> | TrainingNeed;
   accessUser: AccessUser;
 }

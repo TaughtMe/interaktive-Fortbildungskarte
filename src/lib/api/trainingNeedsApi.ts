@@ -58,6 +58,7 @@ export async function fetchTrainingNeeds(): Promise<ApiResult<TrainingNeed[]>> {
 export async function createTrainingNeedViaApi(
   schoolId: string,
   input: CreateTrainingNeedInput,
+  schoolCode: string,
   demoRole?: Role,
 ): Promise<ApiResult<TrainingNeed>> {
   try {
@@ -67,7 +68,7 @@ export async function createTrainingNeedViaApi(
         'Content-Type': 'application/json',
         ...(demoRole ? { 'x-demo-role': demoRole } : {}),
       },
-      body: JSON.stringify({ schoolId, ...input }),
+      body: JSON.stringify({ schoolId, schoolCode, ...input }),
     });
     const payload = await readJson<TrainingNeed>(response);
 
