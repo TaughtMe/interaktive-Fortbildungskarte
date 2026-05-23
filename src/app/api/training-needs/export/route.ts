@@ -41,11 +41,14 @@ export async function GET(request: Request) {
     const priority = url.searchParams.get('priority')?.trim() ?? '';
     const schoolType = url.searchParams.get('schoolType')?.trim() ?? '';
     const location = url.searchParams.get('location')?.trim() ?? '';
+    const districtId = url.searchParams.get('districtId')?.trim() ?? '';
     const sortMode = normalizeSortMode(url.searchParams.get('sort'));
 
     const [schools, trainingNeeds] = await Promise.all([
-      schoolService.getAllSchoolsAsync(),
-      trainingNeedService.getAllTrainingNeedEntriesAsync(),
+      districtId ? schoolService.getSchoolsByDistrictAsync(districtId) : schoolService.getAllSchoolsAsync(),
+      districtId
+        ? trainingNeedService.getTrainingNeedsByDistrictAsync(districtId)
+        : trainingNeedService.getAllTrainingNeedEntriesAsync(),
     ]);
     const schoolsById = new Map(schools.map((school) => [school.id, school]));
 

@@ -13,12 +13,24 @@
 
 import type { SchoolTypKey } from '@/types';
 import type { TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types/trainingNeed';
-import type { Role } from '@/types/auth';
+import type { DatabaseRole } from '@/types/auth';
+
+export interface DistrictRow {
+  id:               string;
+  name:             string;
+  slug:             string;
+  description:      string | null;
+  color:            string | null;
+  boundary_geojson: unknown | null;
+  created_at:       string;
+  updated_at:       string;
+}
 
 // ── schools ──────────────────────────────────────────────────────────────────
 // Future table: CREATE TABLE schools (id TEXT PRIMARY KEY, ...)
 export interface SchoolRow {
   id:         string;
+  district_id: string | null;
   name:       string;
   ort:        string;
   typ:        SchoolTypKey;
@@ -36,12 +48,13 @@ export interface SchoolRow {
 
 // ── users ─────────────────────────────────────────────────────────────────────
 // Future table: CREATE TABLE users (id TEXT PRIMARY KEY, ...)
-// Relationship: users.school_id → schools.id (nullable; only for role='school')
+// Relationships: users.district_id -> districts.id, users.school_id -> schools.id
 export interface UserRow {
   id:           string;
   email:        string;
   display_name: string;
-  role:         Exclude<Role, 'public'>;  // 'public' is anonymous, not a DB user
+  role:         DatabaseRole;  // 'public' is anonymous, not a DB user
+  district_id:  string | null;
   school_id:    string | null;
   created_at:   string;
   updated_at:   string;

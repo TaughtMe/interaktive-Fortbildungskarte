@@ -32,6 +32,14 @@ export async function getAllTrainingNeedEntriesAsync(): Promise<TrainingNeed[]> 
   return trainingNeedRepo.getAllTrainingNeedEntriesAsync();
 }
 
+export function getTrainingNeedsByDistrict(districtId: string): TrainingNeed[] {
+  return trainingNeedRepo.getTrainingNeedsByDistrict(districtId);
+}
+
+export async function getTrainingNeedsByDistrictAsync(districtId: string): Promise<TrainingNeed[]> {
+  return trainingNeedRepo.getTrainingNeedsByDistrictAsync(districtId);
+}
+
 // Demo data initializer — call once for the initial React state.
 // TODO (D1): Replace with a useEffect that fetches from the API on mount.
 export function initializeDemoData(): Record<string, SchoolFortbildungen> {

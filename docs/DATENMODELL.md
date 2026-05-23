@@ -9,6 +9,7 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 
 | Tabelle            | Status            | Beschreibung                                    |
 |--------------------|-------------------|-------------------------------------------------|
+| `districts`        | Vorbereitung      | Schulamtsbezirke fuer Mandantentrennung und spaetere GeoJSON-Grenzen |
 | `schools`          | Mock (statisch)   | Alle Schulen des Schulamts                      |
 | `users`            | Noch nicht aktiv  | Angemeldete Nutzerinnen und Nutzer              |
 | `sessions`         | Noch nicht aktiv  | Nur Schema-Vorbereitung für spätere Sessions  |
@@ -25,6 +26,7 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 | Feld         | Typ          | Pflicht | Hinweis                              |
 |--------------|--------------|---------|--------------------------------------|
 | `id`         | TEXT (UUID)  | ja      | z. B. `"bb-gs"`, `"memmingen-ms-1"` |
+| `district_id`| TEXT NULL    | nein    | FK -> `districts.id`; nullable als Uebergangsstrategie |
 | `name`       | TEXT         | ja      |                                      |
 | `ort`        | TEXT         | ja      |                                      |
 | `typ`        | TEXT         | ja      | `G` / `M` / `GM`                    |
@@ -51,13 +53,27 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 | `id`           | TEXT (UUID)  | ja      |                                             |
 | `email`        | TEXT         | ja      | UNIQUE                                      |
 | `display_name` | TEXT         | ja      |                                             |
-| `role`         | TEXT         | ja      | `school` / `coordinator` / `admin` / `leadership` |
-| `school_id`    | TEXT NULL    | nein    | FK → `schools.id`; nur für Rolle `school`   |
+| `role`         | TEXT         | ja      | neue Rollen plus Legacy-Demo-Rollen |
+| `district_id`  | TEXT NULL    | nein    | FK -> `districts.id`; fuer Bezirksrollen |
+| `school_id`    | TEXT NULL    | nein    | FK -> `schools.id`; fuer `school_user`/Legacy `school` |
 | `created_at`   | TEXT         | ja      |                                             |
 | `updated_at`   | TEXT         | ja      |                                             |
 
-> **Aktuell:** Kein echter User-Store. Die App verwendet `DemoUser` aus `src/types/auth.ts`  
+> **Aktuell:** Kein echter User-Store. Die App verwendet `DemoUser` aus `src/types/auth.ts`
 > ausschließlich für die Demo-Rollenauswahl im UI. Kein Login, keine Passwörter, keine Sessions.
+
+### districts
+
+| Feld | Typ | Pflicht | Hinweis |
+|---|---|---|---|
+| `id` | TEXT | ja | z. B. `district-unterallgaeu` |
+| `name` | TEXT | ja | Anzeigename |
+| `slug` | TEXT | ja | UNIQUE, URL-/Admin-tauglicher Kurzname |
+| `description` | TEXT NULL | nein | Freitext |
+| `color` | TEXT NULL | nein | Karten-/UI-Farbe |
+| `boundary_geojson` | JSONB NULL | nein | Spaetere GeoJSON-Grenze fuer Leaflet |
+| `created_at` | TIMESTAMP | ja | PostgreSQL: timestamp with time zone |
+| `updated_at` | TIMESTAMP | ja | PostgreSQL: timestamp with time zone |
 
 ---
 
@@ -136,8 +152,10 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 ## Beziehungen
 
 ```
-schools ──< training_needs     (1 Schule : n Bedarfe)
-schools ──< users              (1 Schule : n Nutzer mit Rolle 'school')
+districts ──< schools          (1 Bezirk : n Schulen, nullable in der Uebergangsphase)
+districts ──< users            (1 Bezirk : n Bezirksnutzer, nullable fuer Superadmin)
+schools   ──< training_needs   (1 Schule : n Bedarfe)
+schools   ──< users            (1 Schule : n Nutzer mit Rolle 'school_user')
 users   ──< sessions           (1 User : n Sessions)
 training_needs >──< training_offers  (1 Bedarf : 0-n Angebote; oder Angebot ohne Bedarf)
 users   ──< audit_logs         (1 User : n Logeinträge, nullable)
@@ -147,15 +165,16 @@ users   ──< audit_logs         (1 User : n Logeinträge, nullable)
 
 ## Rollenmodell
 
-| Rolle          | Beschreibung                                 | `school_id` erforderlich |
-|----------------|----------------------------------------------|--------------------------|
-| `public`       | Anonymer Gast (kein DB-User)                 | —                        |
-| `school`       | Lehrkraft / Schulleitung einer Schule        | ja                       |
-| `coordinator`  | Schulamts-Koordination, sieht alle Schulen  | nein                     |
-| `admin`        | Verwaltungszugriff, Nutzerverwaltung         | nein                     |
-| `leadership`   | Schulamtsleitung, Gesamtüberblick            | nein                     |
+| Rolle | Sichtbarkeit | Aktionen |
+|---|---|---|
+| `superadmin` | Alle Bezirke, Schulen und Bedarfsmeldungen | Bezirke/Schulen/Nutzer spaeter verwalten, Exporte fuer alle Bezirke |
+| `district_admin` | Eigener Schulamtsbezirk | Bezirk fachlich verwalten, Bedarfsmeldungen im Bezirk exportieren |
+| `coordinator` | Eigener Schulamtsbezirk | Bedarfsmeldungen koordinieren und exportieren |
+| `school_user` | Eigene Schule | Bedarf fuer eigene Schule melden und eigene Daten sehen |
+| `viewer` | Eigener Schulamtsbezirk | Lesender Zugriff, Export vorbereitet, keine Schreibrechte |
+| `public` | Oeffentliche Demo-Ansichten | Keine Schreibrechte; kein DB-User |
 
-> Die Rolle `public` existiert nur im UI-Layer (`DemoUser`) und wird kein DB-Eintrag.
+Legacy-Demo-Rollen bleiben kompatibel: `admin` und `leadership` werden fachlich wie `superadmin` behandelt, `school` wie `school_user`. Diese Abbildung erfolgt in `src/types/auth.ts` ueber `normalizeRole()`. Eine echte Login- oder Session-Logik ist nicht eingebaut.
 
 ---
 
@@ -167,6 +186,7 @@ users   ──< audit_logs         (1 User : n Logeinträge, nullable)
 | Fortbildungsbedarfe  | React-State, init aus `FORTBILDUNGEN_DEFAULT` | `SELECT * FROM training_needs WHERE school_id = ?` |
 | Laufende Fortbildungen | React-State (kein DB-Pendant)     | Künftig `training_offers` mit `status = 'confirmed'` |
 | Nutzer / Rollen      | `DEMO_USERS` in `src/types/auth.ts` | Späteres User-/Rollenmodell nach Auth-Entscheidung |
+| Bezirke              | `DEMO_DISTRICTS` in `src/lib/districts/districtAssignments.ts` | `districts` |
 | Sessions             | Nicht vorhanden                     | Erst nach separatem Auth-/Session-Konzept |
 
 ---
@@ -179,6 +199,21 @@ users   ──< audit_logs         (1 User : n Logeinträge, nullable)
 4. **Repositories:** `src/lib/repositories/*.ts` markieren die späteren Server/API-Grenzen für echte DB-Zugriffe
 5. **State-Init:** Demo-Initialisierung bleibt aktiv, bis ein separater Server/API-Pfad bewusst gebaut wird
 6. **Auth:** Noch nicht produktiv umgesetzt; keine Sessions, Cookies, Passwörter oder Login-Logik
+
+## Aktueller Datenfluss und Mandantenstellen
+
+Der Standardpfad bleibt Mock-first: UI-Komponenten lesen statische Schulen aus `src/data/schools.ts` und Demo-Bedarfe aus dem lokalen State. Optionaler API-Modus (`NEXT_PUBLIC_USE_API=true`) liest `GET /api/schools` und `GET /api/training-needs`; mit `DATA_SOURCE=postgres` nutzt diese API `src/lib/db/postgresClient.ts`.
+
+Fuer Mandantenfaehigkeit vorbereitet wurden diese Stellen:
+
+- PostgreSQL-Schema: `districts`, `schools.district_id`, `users.district_id`, `users.school_id`
+- Repositories: `getSchoolsByDistrict()` und `getTrainingNeedsByDistrict()`
+- API: optionale Query `districtId` fuer Schulen, Bedarfsmeldungen und CSV-Export
+- Access-Control: reine Funktionen in `src/lib/auth/accessControl.ts`
+- Karte: `DistrictBoundaryLayer` fuer spaetere GeoJSON-Grenzen
+- Dashboard: `SuperAdminDashboard` als Platzhalter fuer bezirksuebergreifende Sicht
+
+Ohne `districtId` verhalten sich API und Mock-Modus wie bisher.
 
 ---
 

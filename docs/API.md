@@ -27,10 +27,10 @@ Wenn ein API-Fetch fehlschlägt oder eine unerwartete Antwort liefert, fällt di
 
 | Methode | Pfad | Zweck |
 |---|---|---|
-| `GET` | `/api/schools` | Gibt alle Schulen zurück. Im PostgreSQL-Modus aus `schools`. |
+| `GET` | `/api/schools` | Gibt alle Schulen zurück. Optional `districtId`. Im PostgreSQL-Modus aus `schools`. |
 | `GET` | `/api/schools/{id}` | Gibt eine einzelne Schule zurück. Im PostgreSQL-Modus aus `schools`. |
-| `GET` | `/api/training-needs` | Gibt alle Bedarfsmeldungen zurück. Im PostgreSQL-Modus aus `training_needs`. |
-| `GET` | `/api/training-needs/export` | Gibt Bedarfsmeldungen als CSV zurück. Im PostgreSQL-Modus aus `schools` und `training_needs`. |
+| `GET` | `/api/training-needs` | Gibt alle Bedarfsmeldungen zurück. Optional `districtId`. Im PostgreSQL-Modus aus `training_needs`. |
+| `GET` | `/api/training-needs/export` | Gibt Bedarfsmeldungen als CSV zurück. Optional `districtId`. Im PostgreSQL-Modus aus `schools` und `training_needs`. |
 | `POST` | `/api/training-needs` | Validiert und erstellt eine Bedarfsmeldung. Im PostgreSQL-Modus dauerhaft in `training_needs`. |
 
 ## CSV-Export
@@ -43,6 +43,7 @@ Optionale Query-Parameter:
 
 | Parameter | Werte |
 |---|---|
+| `districtId` | Exakte Bezirks-ID, z. B. `district-unterallgaeu` |
 | `topic` | Exakter Themenname |
 | `priority` | `hoch`, `mittel`, `niedrig` |
 | `schoolType` | `G`, `M`, `GM` |
@@ -64,6 +65,18 @@ Exportierte Spalten:
 | `Datum` | Erstellungsdatum der Bedarfsmeldung |
 
 Der Export enthält keine Kontaktdaten, keine Namen von Leitungen, keine Benutzerkennung und keine Auth-/Sessiondaten.
+
+## Bezirksfilter
+
+Die Mandantenfaehigkeit ist vorbereitend und erzwingt noch keine Authentifizierung. Folgende optionale Filter sind serverseitig vorbereitet:
+
+```http
+GET /api/schools?districtId=district-unterallgaeu
+GET /api/training-needs?districtId=district-unterallgaeu
+GET /api/training-needs/export?districtId=district-unterallgaeu
+```
+
+Ohne `districtId` bleibt das bisherige Verhalten unveraendert. Mit PostgreSQL werden Schulen direkt ueber `schools.district_id` und Bedarfsmeldungen ueber `training_needs -> schools.district_id` gefiltert.
 
 ## Beispiel: Bedarfsmeldung erstellen
 
@@ -97,6 +110,7 @@ Alle Felder im Beispiel sind erforderlich.
 - Mock-/Staticdaten bleiben Standard.
 - PostgreSQL/Supabase wird nur mit `DATA_SOURCE=postgres` oder `APP_DATA_SOURCE=postgres` aktiv.
 - Es gibt noch keine Authentifizierung.
+- Es gibt ein vorbereitetes Rollen-/Access-Control-Modell, aber keine erzwungene produktive Auth.
 - Die API ist deshalb nicht produktiv geschuetzt.
 - Keine Sessions, Cookies oder Passwoerter werden verwendet.
 - Migration und Seed werden nur bewusst gegen eine isolierte Testdatenbank ausgefuehrt.

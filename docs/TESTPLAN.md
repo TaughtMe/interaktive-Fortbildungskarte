@@ -57,6 +57,7 @@ Erwartung: Im Mock-Modus wird lokal ein Bedarf angelegt. Im API-Modus wird zuers
 3. Auf `coordinator` wechseln und Koordinationsansicht pruefen.
 4. Auf `admin` wechseln und Verwaltungsansicht pruefen.
 5. Auf `leadership` wechseln und Gesamtueberblick pruefen.
+6. Neue Demo-Rollen `school_user`, `district_admin`, `viewer` und `superadmin` pruefen.
 
 Erwartung: Tabs passen zur Rolle. Es gibt keine echte Authentifizierung, keine Sessions, keine Cookies und keine Passwoerter.
 
@@ -80,8 +81,11 @@ Bei laufendem Dev-Server:
 
 ```bash
 curl http://localhost:3000/api/schools
+curl "http://localhost:3000/api/schools?districtId=district-unterallgaeu"
 curl http://localhost:3000/api/training-needs
+curl "http://localhost:3000/api/training-needs?districtId=district-unterallgaeu"
 curl http://localhost:3000/api/training-needs/export
+curl "http://localhost:3000/api/training-needs/export?districtId=district-unterallgaeu"
 curl "http://localhost:3000/api/training-needs/export?priority=hoch&sort=priority-desc"
 curl http://localhost:3000/api/schools/unbekannte-schule
 ```
@@ -115,6 +119,7 @@ Erwartung: Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error":
 
 ```bash
 npm run typecheck
+npm run db:pg:check
 npm run build
 npm run verify
 ```
@@ -127,6 +132,7 @@ npm run verify
 npm run db:pg:migrate
 npm run db:pg:seed
 npm run db:migrate:local
+npm run db:generate
 ```
 
 `db:pg:migrate` und `db:pg:seed` nur nach ausdruecklicher Freigabe und nur gegen eine bestaetigte Testdatenbank verwenden. Keine `DATABASE_URL` fuer normale UI- und Smoke-Tests setzen.

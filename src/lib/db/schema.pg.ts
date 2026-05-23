@@ -1,5 +1,6 @@
-import { doublePrecision, index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
-import type { Role } from '@/types/auth';
+import { doublePrecision, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import type { DatabaseRole } from '@/types/auth';
+import type { GeoJsonObject } from 'geojson';
 import type { SchoolTypKey, TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types';
 import type { AuditAction, TrainingOfferStatus } from './schema.types';
 
@@ -9,8 +10,22 @@ import type { AuditAction, TrainingOfferStatus } from './schema.types';
 // existing school IDs are stable semantic slugs, and this avoids a migration-only
 // UUID rewrite before a real Supabase/PostgreSQL connection exists.
 
+export const districts = pgTable('districts', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  description: text('description'),
+  color: text('color'),
+  boundary_geojson: jsonb('boundary_geojson').$type<GeoJsonObject>(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('pg_districts_slug_idx').on(table.slug),
+]);
+
 export const schools = pgTable('schools', {
   id: text('id').primaryKey(),
+  district_id: text('district_id').references(() => districts.id),
   name: text('name').notNull(),
   ort: text('ort').notNull(),
   typ: text('typ').$type<SchoolTypKey>().notNull(),
@@ -25,6 +40,7 @@ export const schools = pgTable('schools', {
   created_at: timestamp('created_at', { withTimezone: true }).notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (table) => [
+  index('pg_schools_district_id_idx').on(table.district_id),
   index('pg_schools_typ_idx').on(table.typ),
   index('pg_schools_ort_idx').on(table.ort),
 ]);
@@ -33,11 +49,13 @@ export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   display_name: text('display_name').notNull(),
-  role: text('role').$type<Exclude<Role, 'public'>>().notNull(),
+  role: text('role').$type<DatabaseRole>().notNull(),
+  district_id: text('district_id').references(() => districts.id),
   school_id: text('school_id').references(() => schools.id),
   created_at: timestamp('created_at', { withTimezone: true }).notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (table) => [
+  index('pg_users_district_id_idx').on(table.district_id),
   index('pg_users_school_id_idx').on(table.school_id),
   index('pg_users_role_idx').on(table.role),
 ]);
@@ -104,6 +122,8 @@ export const auditLogs = pgTable('audit_logs', {
 
 export type PgSchoolSelect = typeof schools.$inferSelect;
 export type PgSchoolInsert = typeof schools.$inferInsert;
+export type PgDistrictSelect = typeof districts.$inferSelect;
+export type PgDistrictInsert = typeof districts.$inferInsert;
 export type PgUserSelect = typeof users.$inferSelect;
 export type PgUserInsert = typeof users.$inferInsert;
 export type PgSessionSelect = typeof sessions.$inferSelect;

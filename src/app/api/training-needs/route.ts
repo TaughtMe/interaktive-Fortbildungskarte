@@ -41,9 +41,13 @@ function isTrainingNeedFormat(value: string): value is TrainingNeedFormat {
   return VALID_FORMATS.includes(value as TrainingNeedFormat);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const trainingNeeds = await trainingNeedService.getAllTrainingNeedEntriesAsync();
+    const url = new URL(request.url);
+    const districtId = url.searchParams.get('districtId')?.trim();
+    const trainingNeeds = districtId
+      ? await trainingNeedService.getTrainingNeedsByDistrictAsync(districtId)
+      : await trainingNeedService.getAllTrainingNeedEntriesAsync();
 
     return NextResponse.json({ data: trainingNeeds });
   } catch {

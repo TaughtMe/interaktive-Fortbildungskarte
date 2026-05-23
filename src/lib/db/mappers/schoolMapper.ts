@@ -16,5 +16,6 @@ export function mapSchoolRowToSchool(row: SchoolRow | PgSchoolSelect): School {
     mail: row.mail,
     web: row.web ?? '',
     leitung: row.leitung ?? '',
+    districtId: 'district_id' in row ? row.district_id : null,
   };
 }

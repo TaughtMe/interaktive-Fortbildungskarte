@@ -1,4 +1,5 @@
 import type { TrainingNeed } from './trainingNeed';
+import type { GeoJsonObject } from 'geojson';
 
 export type SchoolTypKey = 'G' | 'M' | 'GM';
 export type MarkerStyle  = 'pin' | 'dot' | 'icon';
@@ -27,6 +28,18 @@ export interface School {
   mail:    string;
   web:     string;
   leitung: string;
+  districtId?: string | null;
+}
+
+export interface District {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  color?: string | null;
+  boundaryGeoJson?: GeoJsonObject | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LaufendeFortbildung {

@@ -49,6 +49,25 @@ export async function getSchoolsFromPostgres(): Promise<PostgresAdapterResult<Sc
   }
 }
 
+export async function getSchoolsByDistrictFromPostgres(
+  districtId: string,
+): Promise<PostgresAdapterResult<School[]>> {
+  const { client, db } = getPostgresClient();
+
+  try {
+    const rows = await db
+      .select()
+      .from(schools)
+      .where(eq(schools.district_id, districtId))
+      .orderBy(asc(schools.ort), asc(schools.name));
+    return { ok: true, data: rows.map(mapSchoolRowToSchool) };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  } finally {
+    await client.end();
+  }
+}
+
 export async function getSchoolByIdFromPostgres(id: string): Promise<PostgresAdapterResult<School | undefined>> {
   const { client, db } = getPostgresClient();
 
@@ -71,6 +90,26 @@ export async function getTrainingNeedsFromPostgres(): Promise<PostgresAdapterRes
       .from(trainingNeeds)
       .orderBy(desc(trainingNeeds.created_at));
     return { ok: true, data: rows.map(mapTrainingNeedRowToTrainingNeed) };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  } finally {
+    await client.end();
+  }
+}
+
+export async function getTrainingNeedsByDistrictFromPostgres(
+  districtId: string,
+): Promise<PostgresAdapterResult<TrainingNeed[]>> {
+  const { client, db } = getPostgresClient();
+
+  try {
+    const rows = await db
+      .select({ trainingNeed: trainingNeeds })
+      .from(trainingNeeds)
+      .innerJoin(schools, eq(trainingNeeds.school_id, schools.id))
+      .where(eq(schools.district_id, districtId))
+      .orderBy(desc(trainingNeeds.created_at));
+    return { ok: true, data: rows.map((row) => mapTrainingNeedRowToTrainingNeed(row.trainingNeed)) };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   } finally {

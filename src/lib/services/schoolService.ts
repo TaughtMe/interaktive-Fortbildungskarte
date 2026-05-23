@@ -9,6 +9,14 @@ export async function getAllSchoolsAsync(): Promise<School[]> {
   return schoolRepo.getAllSchoolsAsync();
 }
 
+export function getSchoolsByDistrict(districtId: string): School[] {
+  return schoolRepo.getSchoolsByDistrict(districtId);
+}
+
+export async function getSchoolsByDistrictAsync(districtId: string): Promise<School[]> {
+  return schoolRepo.getSchoolsByDistrictAsync(districtId);
+}
+
 export function getSchoolById(id: string): School | undefined {
   return schoolRepo.getSchoolById(id);
 }

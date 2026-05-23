@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import type { School, SchoolTypKey, MarkerStyle, Theme, DetailState, SchoolFortbildungen } from '@/types';
 import type { Role } from '@/types/auth';
 import type { TrainingNeed } from '@/types/trainingNeed';
-import { DEMO_USERS } from '@/types/auth';
+import { DEMO_USERS, normalizeRole } from '@/types/auth';
 import { FORTBILDUNGEN_DEFAULT, SCHULEN, SCHULTYPEN } from '@/data/schools';
 import { fetchSchools } from '@/lib/api/schoolsApi';
 import { createTrainingNeedViaApi, fetchTrainingNeeds } from '@/lib/api/trainingNeedsApi';
@@ -17,6 +17,7 @@ import SchoolDashboard from '@/components/dashboard/SchoolDashboard';
 import CoordinatorDashboard from '@/components/dashboard/CoordinatorDashboard';
 import AdminDashboard from '@/components/dashboard/AdminDashboard';
 import LeadershipDashboard from '@/components/dashboard/LeadershipDashboard';
+import SuperAdminDashboard from '@/components/dashboard/SuperAdminDashboard';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
 
@@ -86,13 +87,19 @@ const ALL_TABS = [
 
 function getTabsForRole(role: Role) {
   const base = ['liste', 'karte'] as Tab[];
+  const normalizedRole = normalizeRole(role);
   const extras: Record<Role, Tab[]> = {
-    public:      [],
-    school:      ['me'],
-    coordinator: ['inbox'],
-    admin:       ['admin'],
-    leadership:  ['overview'],
+    public:         [],
+    superadmin:     ['admin', 'overview'],
+    district_admin: ['admin', 'inbox'],
+    coordinator:    ['inbox'],
+    school_user:    ['me'],
+    viewer:         ['overview'],
+    school:         ['me'],
+    admin:          ['admin'],
+    leadership:     ['overview'],
   };
+  if (normalizedRole === 'public') return ALL_TABS.filter((t) => base.includes(t.key));
   return ALL_TABS.filter((t) => [...base, ...extras[role]].includes(t.key));
 }
 
@@ -254,6 +261,7 @@ export default function Home() {
   const showMap  = !isDashboardTab && (tab === 'karte' || (vp !== 'mobile' && tab === 'liste'));
 
   const demoUser = DEMO_USERS[role];
+  const normalizedRole = normalizeRole(role);
   const mySchool = demoUser.schoolId
     ? schools.find((s) => s.id === demoUser.schoolId) ?? SCHULEN.find((s) => s.id === demoUser.schoolId) ?? null
     : null;
@@ -366,7 +374,9 @@ export default function Home() {
                 <CoordinatorDashboard schools={schools} fortbildungen={fortbildungen} />
               )}
               {tab === 'admin' && (
-                <AdminDashboard schools={schools} />
+                normalizedRole === 'superadmin'
+                  ? <SuperAdminDashboard schools={schools} fortbildungen={fortbildungen} />
+                  : <AdminDashboard schools={schools} />
               )}
               {tab === 'overview' && (
                 <LeadershipDashboard schools={schools} fortbildungen={fortbildungen} />

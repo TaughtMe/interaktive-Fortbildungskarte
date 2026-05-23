@@ -7,7 +7,7 @@ interface Props {
   onChange: (role: Role) => void;
 }
 
-const ROLES: Role[] = ['public', 'school', 'coordinator', 'admin', 'leadership'];
+const ROLES: Role[] = ['public', 'school_user', 'coordinator', 'district_admin', 'viewer', 'superadmin'];
 
 export default function DemoRoleSwitcher({ role, onChange }: Props) {
   const current = DEMO_USERS[role];

@@ -1,8 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { schools, trainingNeeds, type PgSchoolInsert, type PgTrainingNeedInsert } from '../src/lib/db/schema.pg';
+import { districts, schools, trainingNeeds, type PgTrainingNeedInsert } from '../src/lib/db/schema.pg';
 import { FORTBILDUNGEN_DEFAULT, SCHULEN } from '../src/data/schools';
+import { districtsSeed } from '../src/lib/db/seed/districtsSeed';
+import { postgresSchoolsSeed } from '../src/lib/db/seed/schoolsSeed';
 
 const SEED_TIMESTAMP = new Date('2026-05-01T00:00:00.000Z');
 const REQUIRED_CONFIRMATION = 'seed-test-postgres';
@@ -29,27 +31,7 @@ function assertSeedConfirmation(): void {
   }
 }
 
-function optionalText(value: string): string | null {
-  const trimmed = value.trim();
-  return trimmed === '' || trimmed === '-' || trimmed === '—' ? null : trimmed;
-}
-
-const schoolRows: PgSchoolInsert[] = SCHULEN.map((school) => ({
-  id: school.id,
-  name: school.name,
-  ort: school.ort,
-  typ: school.typ,
-  lat: school.lat,
-  lng: school.lng,
-  adresse: school.adresse,
-  tel: school.tel,
-  fax: optionalText(school.fax),
-  mail: school.mail,
-  web: optionalText(school.web),
-  leitung: optionalText(school.leitung),
-  created_at: SEED_TIMESTAMP,
-  updated_at: SEED_TIMESTAMP,
-}));
+const schoolRows = postgresSchoolsSeed;
 
 const trainingNeedRows: PgTrainingNeedInsert[] = SCHULEN.flatMap((school, schoolIndex) => {
   if (schoolIndex % 3 !== 0) {
@@ -80,6 +62,21 @@ async function main(): Promise<void> {
 
   try {
     await db
+      .insert(districts)
+      .values(districtsSeed)
+      .onConflictDoUpdate({
+        target: districts.id,
+        set: {
+          name: sql`excluded.name`,
+          slug: sql`excluded.slug`,
+          description: sql`excluded.description`,
+          color: sql`excluded.color`,
+          boundary_geojson: sql`excluded.boundary_geojson`,
+          updated_at: sql`excluded.updated_at`,
+        },
+      });
+
+    await db
       .insert(schools)
       .values(schoolRows)
       .onConflictDoUpdate({
@@ -92,6 +89,7 @@ async function main(): Promise<void> {
           lng: sql`excluded.lng`,
           adresse: sql`excluded.adresse`,
           tel: sql`excluded.tel`,
+          district_id: sql`excluded.district_id`,
           fax: sql`excluded.fax`,
           mail: sql`excluded.mail`,
           web: sql`excluded.web`,
@@ -118,7 +116,7 @@ async function main(): Promise<void> {
         },
       });
 
-    console.info(`Seed vorbereitet ausgefuehrt: ${schoolRows.length} Schulen, ${trainingNeedRows.length} Demo-Bedarfsmeldungen.`);
+    console.info(`Seed vorbereitet ausgefuehrt: ${districtsSeed.length} Bezirke, ${schoolRows.length} Schulen, ${trainingNeedRows.length} Demo-Bedarfsmeldungen.`);
   } finally {
     await client.end();
   }

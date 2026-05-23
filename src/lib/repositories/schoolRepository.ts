@@ -1,7 +1,12 @@
 import { SCHULEN } from '@/data/schools';
 import { isD1DataSource, isPostgresDataSource } from '@/lib/config/dataSource';
 import { getDbClient } from '@/lib/db/client';
+import { getDistrictIdForSchoolLocation } from '@/lib/districts/districtAssignments';
 import type { School, SchoolTypKey } from '@/types';
+
+function withDemoDistrict(school: School): School {
+  return { ...school, districtId: school.districtId ?? getDistrictIdForSchoolLocation(school) };
+}
 
 export function getAllSchools(): School[] {
   if (isD1DataSource()) {
@@ -12,7 +17,7 @@ export function getAllSchools(): School[] {
     // Mock fallback stays active while D1 bindings or async API reads are not available.
   }
 
-  return SCHULEN;
+  return SCHULEN.map(withDemoDistrict);
 }
 
 export function getSchoolById(id: string): School | undefined {
@@ -24,7 +29,8 @@ export function getSchoolById(id: string): School | undefined {
     // Mock fallback stays active while D1 bindings or async API reads are not available.
   }
 
-  return SCHULEN.find((s) => s.id === id);
+  const school = SCHULEN.find((s) => s.id === id);
+  return school ? withDemoDistrict(school) : undefined;
 }
 
 export async function getAllSchoolsAsync(): Promise<School[]> {
@@ -49,7 +55,22 @@ export async function getSchoolByIdAsync(id: string): Promise<School | undefined
   return getSchoolById(id);
 }
 
+export function getSchoolsByDistrict(districtId: string): School[] {
+  return getAllSchools().filter((school) => school.districtId === districtId);
+}
+
+export async function getSchoolsByDistrictAsync(districtId: string): Promise<School[]> {
+  if (isPostgresDataSource()) {
+    const { getSchoolsByDistrictFromPostgres } = await import('@/lib/db/postgresClient');
+    const result = await getSchoolsByDistrictFromPostgres(districtId);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }
+
+  return getSchoolsByDistrict(districtId);
+}
+
 // TODO (DB): Replace with a server/API-backed query when the database path is activated.
 export function getSchoolsByType(typ: SchoolTypKey): School[] {
-  return SCHULEN.filter((s) => s.typ === typ);
+  return getAllSchools().filter((s) => s.typ === typ);
 }

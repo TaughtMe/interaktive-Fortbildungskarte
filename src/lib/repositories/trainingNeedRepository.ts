@@ -1,6 +1,7 @@
 import { SCHULEN, FORTBILDUNGEN_DEFAULT } from '@/data/schools';
 import { isD1DataSource, isPostgresDataSource } from '@/lib/config/dataSource';
 import { getDbClient } from '@/lib/db/client';
+import { getDistrictIdForSchoolLocation } from '@/lib/districts/districtAssignments';
 import type { SchoolFortbildungen } from '@/types';
 import type { TrainingNeed } from '@/types/trainingNeed';
 
@@ -61,6 +62,29 @@ export async function getAllTrainingNeedEntriesAsync(): Promise<TrainingNeed[]> 
   }
 
   return Object.values(getTrainingNeeds()).flatMap((schoolData) => schoolData.bedarf);
+}
+
+export function getTrainingNeedsByDistrict(districtId: string): TrainingNeed[] {
+  const schoolIds = new Set(
+    SCHULEN
+      .filter((school) => getDistrictIdForSchoolLocation(school) === districtId)
+      .map((school) => school.id),
+  );
+
+  return Object.values(getTrainingNeeds())
+    .flatMap((schoolData) => schoolData.bedarf)
+    .filter((need) => schoolIds.has(need.schoolId));
+}
+
+export async function getTrainingNeedsByDistrictAsync(districtId: string): Promise<TrainingNeed[]> {
+  if (isPostgresDataSource()) {
+    const { getTrainingNeedsByDistrictFromPostgres } = await import('@/lib/db/postgresClient');
+    const result = await getTrainingNeedsByDistrictFromPostgres(districtId);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }
+
+  return getTrainingNeedsByDistrict(districtId);
 }
 
 export async function getTrainingNeedsAsync(): Promise<Record<string, SchoolFortbildungen>> {

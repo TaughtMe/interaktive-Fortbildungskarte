@@ -50,6 +50,8 @@ Die vorhandenen Fach-Tabellen wurden übertragen:
 | `training_offers` | Fortbildungsangebote, optional an Bedarf gekoppelt. |
 | `audit_logs` | Audit-Schema, noch ohne Write-Pfad. |
 
+Fuer Mandantenfaehigkeit ist zusaetzlich `districts` vorbereitet. `schools.district_id` und `users.district_id` sind bewusst nullable, damit bestehende MVP-Daten ohne riskante Backfill-Pflicht weiter funktionieren. `districts.boundary_geojson` ist als `jsonb` fuer spaetere Leaflet-Grenzen vorgesehen.
+
 IDs bleiben zunächst `text`, weil vorhandene Schul-IDs stabile sprechende Slugs sind und die Seed-/Mockdaten ohne künstliche UUID-Migration weiter nutzbar bleiben. Für neu entstehende produktive Entitäten kann später entschieden werden, ob UUIDs eingeführt werden.
 
 Die erste PostgreSQL-Migration wurde lokal vorbereitet und liegt versionierbar unter `drizzle-pg/migrations`. Sie wurde noch nicht gegen eine echte Datenbank angewendet. Die Anwendung läuft weiterhin standardmäßig mit Mock-/Staticdaten und ohne aktive PostgreSQL- oder Supabase-Verbindung.
@@ -60,6 +62,7 @@ Die erste PostgreSQL-Migration wurde lokal vorbereitet und liegt versionierbar u
 - Keine Supabase-Migration
 - Keine echten Supabase-Credentials
 - Keine Supabase Auth
+- Keine produktive Auth oder erzwungene Bezirkstrennung
 - Keine Passwörter, Sessions oder Cookies
 - Keine Änderung der laufenden Mock-/Staticdaten-Strategie
 

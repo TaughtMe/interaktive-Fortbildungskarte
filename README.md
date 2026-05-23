@@ -7,6 +7,7 @@ Interaktive Next.js-App zur Sichtung von Schulen und Fortbildungsbedarfen im Sch
 - Aktive App: Next.js unter `src/`
 - Standard-Datenquelle: Mock-/Staticdaten aus `src/data/schools.ts`
 - PostgreSQL/Supabase: bevorzugte Zielrichtung; API-Routen können dauerhaft aus PostgreSQL lesen und Bedarfsmeldungen schreiben
+- Mandantenfähigkeit: Schulamtsbezirke, Rollenmodell und optionale Bezirksfilter sind strukturell vorbereitet
 - MVP-Bedienbarkeit: Koordinationsdashboard mit Bedarfsliste, Filtern, Sortierung und CSV-Export; Leadership-Dashboard mit einfachen Kennzahlen
 - Cloudflare D1: vorbereitete Alternative, nicht priorisierte Zielarchitektur
 - Legacy-Demo: nur Referenz unter `legacy/`
@@ -62,6 +63,20 @@ Das Koordinationsdashboard zeigt alle Bedarfsmeldungen mit Schule, Ort, Schulart
 
 Das Leadership-Dashboard zeigt Anzahl der Schulen, Anzahl der Bedarfsmeldungen, häufigste Themen und Prioritätsverteilung.
 
+## Mandantenfähigkeit und Rollen
+
+Vorbereitet sind Schulamtsbezirke (`districts`), nullable Bezirkszuordnungen fuer Schulen und Nutzer sowie die Rollen `superadmin`, `district_admin`, `coordinator`, `school_user` und `viewer`. Alte Demo-Rollen bleiben abgebildet: `admin`/`leadership` entsprechen fachlich `superadmin`, `school` entspricht `school_user`.
+
+Die API unterstuetzt optional `districtId`:
+
+```bash
+curl "http://localhost:3000/api/schools?districtId=district-unterallgaeu"
+curl "http://localhost:3000/api/training-needs?districtId=district-unterallgaeu"
+curl "http://localhost:3000/api/training-needs/export?districtId=district-unterallgaeu"
+```
+
+Diese Filter bereiten die Bezirkstrennung vor, erzwingen aber noch keine produktive Authentifizierung. Supabase Auth, externe Auth-Anbieter und echte personenbezogene Daten sind weiterhin nicht eingebaut.
+
 ## Prüfen
 
 Einzeln:
@@ -99,6 +114,8 @@ npm run verify
 ## Datenbankstrategie
 
 Supabase/PostgreSQL ist die bevorzugte Richtung. Dafür liegen `src/lib/db/schema.pg.ts`, `src/lib/db/postgresClient.ts`, `drizzle.pg.config.ts` und `drizzle-pg/migrations/` vor. Ohne lokal gesetzte `DATABASE_URL` und ohne `DATA_SOURCE=postgres` wird keine echte Verbindung für die API erwartet.
+
+Die aktuelle PostgreSQL-Struktur enthaelt `districts`, `schools.district_id` und `users.district_id`/`users.school_id`. Bezirksgrenzen koennen spaeter als GeoJSON in `districts.boundary_geojson` gespeichert und mit `DistrictBoundaryLayer` auf der Leaflet-Karte angezeigt werden.
 
 D1 bleibt als vorbereitete Alternative im Projekt: `src/lib/db/schema.ts`, `drizzle.config.ts`, `drizzle/migrations/` und `wrangler.toml`. Diese Richtung ist dokumentiert, aber aktuell nicht bevorzugt.
 
