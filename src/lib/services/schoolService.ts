@@ -5,8 +5,16 @@ export function getAllSchools(): School[] {
   return schoolRepo.getAllSchools();
 }
 
+export async function getAllSchoolsAsync(): Promise<School[]> {
+  return getAllSchools();
+}
+
 export function getSchoolById(id: string): School | undefined {
   return schoolRepo.getSchoolById(id);
+}
+
+export async function getSchoolByIdAsync(id: string): Promise<School | undefined> {
+  return getSchoolById(id);
 }
 
 export function getSchoolsByType(typ: SchoolTypKey): School[] {

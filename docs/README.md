@@ -5,15 +5,17 @@ Diese Dokumente beschreiben den aktuellen Vorbereitungsstand der Fortbildungskar
 ## Empfohlene Reihenfolge
 
 1. `README.md` im Projektwurzelverzeichnis fuer Installation, Start und sichere Pruefbefehle.
-2. `docs/DATENQUELLEN.md` fuer den aktuellen Mock-Betrieb und die vorbereitete D1-Alternative.
-3. `docs/DATENMODELL.md` fuer Entitaeten, UI-Typen und vorbereitete DB-Tabellen.
-4. `docs/ARCHITEKTUR_DATENBANK.md` fuer die Datenbankentscheidung: Supabase/PostgreSQL bevorzugt, D1 nur Alternative.
-5. `docs/SUPABASE_SETUP.md` erst lesen, wenn eine isolierte Supabase-Testmigration bewusst freigegeben wird.
+2. `docs/API.md` fuer die vorbereitete Server-/API-Grenze im Mock-Betrieb.
+3. `docs/DATENQUELLEN.md` fuer den aktuellen Mock-Betrieb und die vorbereitete D1-Alternative.
+4. `docs/DATENMODELL.md` fuer Entitaeten, UI-Typen und vorbereitete DB-Tabellen.
+5. `docs/ARCHITEKTUR_DATENBANK.md` fuer die Datenbankentscheidung: Supabase/PostgreSQL bevorzugt, D1 nur Alternative.
+6. `docs/SUPABASE_SETUP.md` erst lesen, wenn eine isolierte Supabase-Testmigration bewusst freigegeben wird.
 
 ## Dokumente
 
 | Datei | Zweck |
 |---|---|
+| `API.md` | Beschreibt die vorbereiteten API-Endpunkte im aktuellen Mock-Betrieb. |
 | `DATENMODELL.md` | Beschreibt Fachentitaeten, Rollen, UI-Typen und vorbereitete DB-Tabellen. |
 | `DATENQUELLEN.md` | Erklaert den Standard-Mockbetrieb und den nicht aktiven D1-Pfad. |
 | `ARCHITEKTUR_DATENBANK.md` | Begruendet PostgreSQL/Supabase als bevorzugte Zielrichtung. |

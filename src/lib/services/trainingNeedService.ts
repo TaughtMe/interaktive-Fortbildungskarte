@@ -9,8 +9,27 @@ export function createTrainingNeed(
   return trainingNeedRepo.createTrainingNeed(schoolId, partial);
 }
 
+export async function createTrainingNeedAsync(
+  schoolId: string,
+  partial: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
+): Promise<TrainingNeed> {
+  return createTrainingNeed(schoolId, partial);
+}
+
 export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
   return trainingNeedRepo.getTrainingNeeds();
+}
+
+export async function getTrainingNeedsAsync(): Promise<Record<string, SchoolFortbildungen>> {
+  return getTrainingNeeds();
+}
+
+export function getAllTrainingNeedEntries(): TrainingNeed[] {
+  return Object.values(getTrainingNeeds()).flatMap((schoolData) => schoolData.bedarf);
+}
+
+export async function getAllTrainingNeedEntriesAsync(): Promise<TrainingNeed[]> {
+  return getAllTrainingNeedEntries();
 }
 
 // Demo data initializer — call once for the initial React state.

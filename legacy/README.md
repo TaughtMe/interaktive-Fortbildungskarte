@@ -1,7 +1,7 @@
 # Legacy-Demo
 
-Dieser Ordner enthaelt die urspruengliche HTML/React-Demo der interaktiven Fortbildungskarte.
+Dieser Ordner enthält die ursprüngliche HTML/React-Demo der interaktiven Fortbildungskarte.
 
-Die aktive App liegt in der Next.js-Struktur unter `src/`. `legacy/` dient nur als Referenz fuer fruehere UI- und Interaktionsideen.
+Die aktive App liegt in der Next.js-Struktur unter `src/`. `legacy/` dient nur als Referenz für frühere UI- und Interaktionsideen.
 
-Aenderungen an Legacy-Dateien sollten nur erfolgen, wenn externe Abhaengigkeiten entfernt, Sicherheitsprobleme bereinigt oder Referenzmaterial eindeutig korrigiert werden muss. Neue Fachlogik gehoert in die aktive Next.js-App unter `src/`.
+Änderungen an Legacy-Dateien sollten nur erfolgen, wenn externe Abhängigkeiten entfernt, Sicherheitsprobleme bereinigt oder Referenzmaterial eindeutig korrigiert werden muss. Neue Fachlogik gehört in die aktive Next.js-App unter `src/`.

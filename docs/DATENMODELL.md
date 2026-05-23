@@ -11,7 +11,7 @@ Status: **Vorbereitung** - noch keine echte Datenbankverbindung; alle Daten sind
 |--------------------|-------------------|-------------------------------------------------|
 | `schools`          | Mock (statisch)   | Alle Schulen des Schulamts                      |
 | `users`            | Noch nicht aktiv  | Angemeldete Nutzerinnen und Nutzer              |
-| `sessions`         | Noch nicht aktiv  | Nur Schema-Vorbereitung fuer spaetere Sessions  |
+| `sessions`         | Noch nicht aktiv  | Nur Schema-Vorbereitung für spätere Sessions  |
 | `training_needs`   | Mock (React-State)| Gemeldeter Fortbildungsbedarf pro Schule        |
 | `training_offers`  | Noch nicht aktiv  | Angebotene Fortbildungen als Antwort auf Bedarf |
 | `audit_logs`       | Noch nicht aktiv  | Protokoll aller Änderungsoperationen            |
@@ -161,12 +161,12 @@ users   ──< audit_logs         (1 User : n Logeinträge, nullable)
 
 ## Was aktuell noch Mock-Daten sind
 
-| Bereich              | Quelle                              | Spaeterer DB-Ersatz                      |
+| Bereich              | Quelle                              | Späterer DB-Ersatz                      |
 |----------------------|-------------------------------------|------------------------------------------|
-| Schulliste (52)      | `src/data/schools.ts → SCHULEN`     | `SELECT * FROM schools` ueber PostgreSQL/Supabase |
+| Schulliste (52)      | `src/data/schools.ts → SCHULEN`     | `SELECT * FROM schools` über PostgreSQL/Supabase |
 | Fortbildungsbedarfe  | React-State, init aus `FORTBILDUNGEN_DEFAULT` | `SELECT * FROM training_needs WHERE school_id = ?` |
 | Laufende Fortbildungen | React-State (kein DB-Pendant)     | Künftig `training_offers` mit `status = 'confirmed'` |
-| Nutzer / Rollen      | `DEMO_USERS` in `src/types/auth.ts` | Spaeteres User-/Rollenmodell nach Auth-Entscheidung |
+| Nutzer / Rollen      | `DEMO_USERS` in `src/types/auth.ts` | Späteres User-/Rollenmodell nach Auth-Entscheidung |
 | Sessions             | Nicht vorhanden                     | Erst nach separatem Auth-/Session-Konzept |
 
 ---
@@ -174,11 +174,11 @@ users   ──< audit_logs         (1 User : n Logeinträge, nullable)
 ## Was Drizzle vorbereitet
 
 1. **PostgreSQL-Schema:** `src/lib/db/schema.pg.ts` mit Drizzle-`pgTable()`-Definitionen als bevorzugte Zielrichtung
-2. **PostgreSQL-Migrationen:** `drizzle-pg/migrations/` - generiert via `npm run db:pg:generate`, geprueft via `npm run db:pg:check`
+2. **PostgreSQL-Migrationen:** `drizzle-pg/migrations/` - generiert via `npm run db:pg:generate`, geprüft via `npm run db:pg:check`
 3. **D1-Alternative:** `src/lib/db/schema.ts` und `drizzle/migrations/` bleiben vorbereitet, aber nicht priorisiert
-4. **Repositories:** `src/lib/repositories/*.ts` markieren die spaeteren Server/API-Grenzen fuer echte DB-Zugriffe
+4. **Repositories:** `src/lib/repositories/*.ts` markieren die späteren Server/API-Grenzen für echte DB-Zugriffe
 5. **State-Init:** Demo-Initialisierung bleibt aktiv, bis ein separater Server/API-Pfad bewusst gebaut wird
-6. **Auth:** Noch nicht produktiv umgesetzt; keine Sessions, Cookies, Passwoerter oder Login-Logik
+6. **Auth:** Noch nicht produktiv umgesetzt; keine Sessions, Cookies, Passwörter oder Login-Logik
 
 ---
 
@@ -188,10 +188,10 @@ Status: vorbereitet, aber noch nicht produktiv aktiv. Die App nutzt weiterhin Mo
 
 | Tabelle | Drizzle-Datei | geplanter Repository-Anschluss |
 |---------|---------------|--------------------------------|
-| `schools` | `src/lib/db/schema.pg.ts -> schools`, alternativ `src/lib/db/schema.ts -> schools` | `src/lib/repositories/schoolRepository.ts` liest spaeter ueber eine Server/API-Grenze und mappt Rows auf UI-Typen |
+| `schools` | `src/lib/db/schema.pg.ts -> schools`, alternativ `src/lib/db/schema.ts -> schools` | `src/lib/repositories/schoolRepository.ts` liest später über eine Server/API-Grenze und mappt Rows auf UI-Typen |
 | `users` | `src/lib/db/schema.pg.ts -> users`, alternativ `src/lib/db/schema.ts -> users` | Noch kein produktiver Anschluss; später User-Repository nach Auth-Entscheidung |
 | `sessions` | `src/lib/db/schema.pg.ts -> sessions`, alternativ `src/lib/db/schema.ts -> sessions` | Noch kein produktiver Anschluss; erst nach Auth-/Session-Konzept |
-| `training_needs` | `src/lib/db/schema.pg.ts -> trainingNeeds`, alternativ `src/lib/db/schema.ts -> trainingNeeds` | `src/lib/repositories/trainingNeedRepository.ts` liest/schreibt spaeter ueber eine Server/API-Grenze |
+| `training_needs` | `src/lib/db/schema.pg.ts -> trainingNeeds`, alternativ `src/lib/db/schema.ts -> trainingNeeds` | `src/lib/repositories/trainingNeedRepository.ts` liest/schreibt später über eine Server/API-Grenze |
 | `training_offers` | `src/lib/db/schema.pg.ts -> trainingOffers`, alternativ `src/lib/db/schema.ts -> trainingOffers` | Später eigenes Repository bzw. Anschluss an Fortbildungsangebote/Dashboards |
 | `audit_logs` | `src/lib/db/schema.pg.ts -> auditLogs`, alternativ `src/lib/db/schema.ts -> auditLogs` | Optionaler Write-Pfad nach Auth + Mutationen, aktuell ohne Nutzung |
 
@@ -199,22 +199,22 @@ Technische Dateien:
 
 | Datei | Zweck |
 |-------|-------|
-| `src/lib/db/schema.pg.ts` | PostgreSQL-kompatible Drizzle-Tabellen mit `timestamp with time zone` und `doublePrecision`; bevorzugte Zielrichtung fuer Supabase/PostgreSQL |
-| `drizzle.pg.config.ts` | PostgreSQL-Drizzle-Konfiguration; nutzt ohne `DATABASE_URL` einen absichtlich ungueltigen Platzhalter |
-| `drizzle-pg/migrations/` | Versionierte PostgreSQL-Migrationen; werden nur geprueft, nicht automatisch angewendet |
+| `src/lib/db/schema.pg.ts` | PostgreSQL-kompatible Drizzle-Tabellen mit `timestamp with time zone` und `doublePrecision`; bevorzugte Zielrichtung für Supabase/PostgreSQL |
+| `drizzle.pg.config.ts` | PostgreSQL-Drizzle-Konfiguration; nutzt ohne `DATABASE_URL` einen absichtlich ungültigen Platzhalter |
+| `drizzle-pg/migrations/` | Versionierte PostgreSQL-Migrationen; werden nur geprüft, nicht automatisch angewendet |
 | `src/lib/db/schema.ts` | D1/SQLite-kompatible Drizzle-Tabellen mit `TEXT`-IDs, ISO-Datumswerten als `TEXT`, numerischen Feldern als `INTEGER`/`REAL` |
 | `src/lib/db/mappers/schoolMapper.ts` | Übersetzt nullable DB-Felder (`fax`, `web`, `leitung`) in UI-kompatible Strings |
 | `src/lib/db/mappers/trainingNeedMapper.ts` | Übersetzt Snake-Case-DB-Rows in den bestehenden `TrainingNeed`-UI-Typ |
 | `drizzle.config.ts` | Drizzle-Kit-Konfiguration für Schema/Migrations-Generierung; nutzt nur Platzhalter-Credentials |
 | `wrangler.toml` | Lokale Cloudflare-D1-Vorbereitung mit Platzhalter-Database-ID |
 
-Migrationen werden in diesem Schritt nicht produktiv angewendet. PostgreSQL-Migrationen werden mit `npm run db:pg:check` nur geprueft. D1-Migrationen bleiben als Alternative versioniert.
+Migrationen werden in diesem Schritt nicht produktiv angewendet. PostgreSQL-Migrationen werden mit `npm run db:pg:check` nur geprüft. D1-Migrationen bleiben als Alternative versioniert.
 
 ---
 
 ## Stand
 
-PostgreSQL-Schema (`src/lib/db/schema.pg.ts`) und Migrationen unter `drizzle-pg/migrations/` sind vorbereitet, ohne produktive Daten zu beruehren. D1-Schema (`src/lib/db/schema.ts`) und `wrangler.toml` bleiben als Alternative erhalten. Der Anschluss der Repositories an eine echte Datenbank bleibt ein separater spaeterer Schritt.
+PostgreSQL-Schema (`src/lib/db/schema.pg.ts`) und Migrationen unter `drizzle-pg/migrations/` sind vorbereitet, ohne produktive Daten zu berühren. D1-Schema (`src/lib/db/schema.ts`) und `wrangler.toml` bleiben als Alternative erhalten. Der Anschluss der Repositories an eine echte Datenbank bleibt ein separater späterer Schritt.
 
 ---
 
@@ -230,7 +230,7 @@ Status: lokal vorbereitet, aber weiterhin nicht produktiv aktiv. Die Anwendung s
 | Erste Migration | `drizzle/migrations/0000_silly_energizer.sql` | Erstellt aus dem Drizzle-Schema; nicht produktiv angewendet |
 | Migration-Metadaten | `drizzle/migrations/meta/` | Von Drizzle Kit erzeugte Snapshots/Journal-Dateien |
 | Migration generieren | `npm run db:generate` | Erzeugt neue Migrationsdateien aus Schemaänderungen |
-| Lokal anwenden | `npm run db:migrate:local` | Wendet Migrationen auf eine lokale Wrangler-D1-Instanz an; nicht automatisch ausfuehren |
+| Lokal anwenden | `npm run db:migrate:local` | Wendet Migrationen auf eine lokale Wrangler-D1-Instanz an; nicht automatisch ausführen |
 
 Es gibt absichtlich kein Deploy- oder Remote-Migrationsskript. Produktive D1-Datenbanken werden in diesem Stand nicht angesprochen.
 

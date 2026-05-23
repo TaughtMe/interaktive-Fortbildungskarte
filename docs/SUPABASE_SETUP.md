@@ -1,33 +1,33 @@
 # Supabase-Testanbindung
 
 Stand: 2026-05-22  
-Status: Planung fuer eine spaetere, bewusst freigegebene Testmigration. Diese Anleitung aktiviert keine Supabase-Verbindung und enthaelt keine echten Zugangsdaten.
+Status: Planung für eine spätere, bewusst freigegebene Testmigration. Diese Anleitung aktiviert keine Supabase-Verbindung und enthält keine echten Zugangsdaten.
 
-Nicht im Rahmen dieses Dokuments automatisch ausfuehren: `npm run db:pg:migrate`, `npm run db:pg:seed`, `npm run db:migrate:local`.
+Nicht im Rahmen dieses Dokuments automatisch ausführen: `npm run db:pg:migrate`, `npm run db:pg:seed`, `npm run db:migrate:local`.
 
 ## Ziel
 
-Die vorbereitete PostgreSQL-Migration unter `drizzle-pg/migrations/` soll spaeter gegen eine isolierte Supabase-Testdatenbank angewendet werden. Die App bleibt bis dahin ohne aktive Supabase-Verbindung, ohne Supabase Auth und ohne produktive Datenbankpflicht.
+Die vorbereitete PostgreSQL-Migration unter `drizzle-pg/migrations/` soll später gegen eine isolierte Supabase-Testdatenbank angewendet werden. Die App bleibt bis dahin ohne aktive Supabase-Verbindung, ohne Supabase Auth und ohne produktive Datenbankpflicht.
 
 ## Voraussetzungen
 
 - Supabase-Testprojekt, klar getrennt von Produktion und echten Schulamtsdaten
-- Lokale Node-Abhaengigkeiten installiert
+- Lokale Node-Abhängigkeiten installiert
 - PostgreSQL-Drizzle-Konfiguration in `drizzle.pg.config.ts`
 - Versionierte Migrationen unter `drizzle-pg/migrations/`
 - Keine echten personenbezogenen Daten im Testbetrieb
 
 ## 1. Supabase-Testprojekt anlegen
 
-1. In Supabase ein neues Projekt nur fuer Tests anlegen.
-2. Eine Region waehlen, die zur spaeteren Datenschutzbewertung passt.
+1. In Supabase ein neues Projekt nur für Tests anlegen.
+2. Eine Region wählen, die zur späteren Datenschutzbewertung passt.
 3. Projekt eindeutig als Testumgebung benennen, zum Beispiel `fortbildungskarte-test`.
 4. Keine produktiven Daten importieren.
 5. Supabase Auth nicht konfigurieren, solange die App keine echte Authentifizierung nutzt.
 
 ## 2. DATABASE_URL sicher lokal speichern
 
-Die Datenbank-Verbindungszeichenfolge wird ausschliesslich lokal gespeichert. Sie darf nicht in `.env.example`, Dokumentation, Quellcode, Commits, Tickets oder Chatprotokolle kopiert werden.
+Die Datenbank-Verbindungszeichenfolge wird ausschließlich lokal gespeichert. Sie darf nicht in `.env.example`, Dokumentation, Quellcode, Commits, Tickets oder Chatprotokolle kopiert werden.
 
 1. Lokal eine Datei `.env.local` im Projektwurzelverzeichnis anlegen.
 2. Dort die Supabase-PostgreSQL-URL als `DATABASE_URL` eintragen.
@@ -47,59 +47,59 @@ Nicht committen:
 - `.dev.vars`
 - lokale DB-Dateien, Dumps und `.wrangler/`
 
-Diese Dateien sind in `.gitignore` ausgeschlossen und muessen lokal bleiben.
+Diese Dateien sind in `.gitignore` ausgeschlossen und müssen lokal bleiben.
 
-## 3. Vor der Migration pruefen
+## 3. Vor der Migration prüfen
 
 Vor dem Anwenden der Migration:
 
 1. Sicherstellen, dass das Zielprojekt wirklich die Supabase-Testdatenbank ist.
-2. Pruefen, dass keine Produktions-URL in `.env.local` steht.
-3. Pruefen, dass `drizzle.pg.config.ts` auf `./src/lib/db/schema.pg.ts` und `./drizzle-pg/migrations` zeigt.
-4. Pruefen, dass `drizzle-pg/migrations/0000_secret_hitman.sql` die erwarteten Tabellen enthaelt:
+2. Prüfen, dass keine Produktions-URL in `.env.local` steht.
+3. Prüfen, dass `drizzle.pg.config.ts` auf `./src/lib/db/schema.pg.ts` und `./drizzle-pg/migrations` zeigt.
+4. Prüfen, dass `drizzle-pg/migrations/0000_secret_hitman.sql` die erwarteten Tabellen enthält:
    - `schools`
    - `users`
    - `sessions`
    - `training_needs`
    - `training_offers`
    - `audit_logs`
-5. Optional vorbereitend ausfuehren:
+5. Optional vorbereitend ausführen:
 
 ```bash
 npm run db:pg:check
 ```
 
-## 4. Migration spaeter anwenden
+## 4. Migration später anwenden
 
-Erst nach ausdruecklicher Freigabe und nur mit lokaler `.env.local`:
+Erst nach ausdrücklicher Freigabe und nur mit lokaler `.env.local`:
 
 ```bash
 npm run db:pg:migrate
 ```
 
-Dieser Befehl verwendet `drizzle.pg.config.ts` und erwartet `DATABASE_URL` aus der lokalen Umgebung. Er darf nicht ausgefuehrt werden, solange die Zielumgebung nicht eindeutig als Testdatenbank bestaetigt ist.
+Dieser Befehl verwendet `drizzle.pg.config.ts` und erwartet `DATABASE_URL` aus der lokalen Umgebung. Er darf nicht ausgeführt werden, solange die Zielumgebung nicht eindeutig als Testdatenbank bestätigt ist.
 
 ## 5. Testdaten danach seeden
 
-Nach erfolgreicher Migration kann die Testdatenbank optional mit vorbereiteten Schul-Stammdaten und Demo-Bedarfsmeldungen befuellt werden. Die Reihenfolge ist immer:
+Nach erfolgreicher Migration kann die Testdatenbank optional mit vorbereiteten Schul-Stammdaten und Demo-Bedarfsmeldungen befüllt werden. Die Reihenfolge ist immer:
 
-1. Migration ausfuehren.
-2. Tabellen pruefen.
-3. Seed nur fuer die bestaetigte Testdatenbank ausfuehren.
+1. Migration ausführen.
+2. Tabellen prüfen.
+3. Seed nur für die bestätigte Testdatenbank ausführen.
 
-Der Seed enthaelt Schul-Stammdaten aus dem bestehenden Mock-/Staticdatenbestand und synthetische Demo-Bedarfsmeldungen. Keine echten personenbezogenen Daten ergaenzen oder importieren.
+Der Seed enthält Schul-Stammdaten aus dem bestehenden Mock-/Staticdatenbestand und synthetische Demo-Bedarfsmeldungen. Keine echten personenbezogenen Daten ergänzen oder importieren.
 
-Der Seed ist bewusst als gefaehrlicher Befehl markiert und verlangt eine lokale `DATABASE_URL` sowie eine zusaetzliche Bestaetigung:
+Der Seed ist bewusst als gefährlicher Befehl markiert und verlangt eine lokale `DATABASE_URL` sowie eine zusätzliche Bestätigung:
 
 ```bash
 SEED_PG_CONFIRM=seed-test-postgres npm run db:pg:seed
 ```
 
-Vorher muss `DATABASE_URL` bewusst lokal gesetzt sein, zum Beispiel ueber `.env.local` oder die eigene Shell-Umgebung. Den Befehl nicht gegen Produktion ausfuehren.
+Vorher muss `DATABASE_URL` bewusst lokal gesetzt sein, zum Beispiel über `.env.local` oder die eigene Shell-Umgebung. Den Befehl nicht gegen Produktion ausführen.
 
-## 6. Tabellen danach pruefen
+## 6. Tabellen danach prüfen
 
-Nach erfolgreicher Migration im Supabase-Dashboard oder per sicherem lokalen SQL-Client pruefen:
+Nach erfolgreicher Migration im Supabase-Dashboard oder per sicherem lokalen SQL-Client prüfen:
 
 ```sql
 select table_name
@@ -117,7 +117,7 @@ Erwartete Tabellen:
 - `training_offers`
 - `users`
 
-Optional die Drizzle-Migrationstabelle pruefen, falls Drizzle sie angelegt hat:
+Optional die Drizzle-Migrationstabelle prüfen, falls Drizzle sie angelegt hat:
 
 ```sql
 select *
@@ -125,23 +125,23 @@ from drizzle.__drizzle_migrations
 order by created_at;
 ```
 
-Nach einem Seed-Lauf koennen die Datensaetze stichprobenartig geprueft werden:
+Nach einem Seed-Lauf können die Datensätze stichprobenartig geprüft werden:
 
 ```sql
 select count(*) from schools;
 select count(*) from training_needs;
 ```
 
-## 7. Rollback und Reset fuer die Testdatenbank
+## 7. Rollback und Reset für die Testdatenbank
 
-Fuer diese erste Testmigration ist kein automatischer produktiver Rollback-Prozess definiert. Fuer eine reine Testdatenbank gibt es zwei sichere Wege:
+Für diese erste Testmigration ist kein automatischer produktiver Rollback-Prozess definiert. Für eine reine Testdatenbank gibt es zwei sichere Wege:
 
-1. Supabase-Testprojekt komplett loeschen und neu anlegen.
-2. Testdatenbank manuell zuruecksetzen, nachdem bestaetigt wurde, dass keine echten Daten enthalten sind.
+1. Supabase-Testprojekt komplett löschen und neu anlegen.
+2. Testdatenbank manuell zurücksetzen, nachdem bestätigt wurde, dass keine echten Daten enthalten sind.
 
-Ein manueller Reset darf nur in der Testdatenbank erfolgen. Vorher die Projekt-ID, den Projektnamen und die Verbindungs-URL nochmals pruefen.
+Ein manueller Reset darf nur in der Testdatenbank erfolgen. Vorher die Projekt-ID, den Projektnamen und die Verbindungs-URL nochmals prüfen.
 
-Beispiel fuer einen vollstaendigen Tabellen-Reset in einer Testdatenbank:
+Beispiel für einen vollständigen Tabellen-Reset in einer Testdatenbank:
 
 ```sql
 drop table if exists audit_logs cascade;
@@ -153,11 +153,11 @@ drop table if exists schools cascade;
 drop schema if exists drizzle cascade;
 ```
 
-Danach kann die Migration erneut mit `npm run db:pg:migrate` angewendet werden, sofern die Testumgebung erneut bestaetigt wurde.
+Danach kann die Migration erneut mit `npm run db:pg:migrate` angewendet werden, sofern die Testumgebung erneut bestätigt wurde.
 
 ## 8. DSGVO-Hinweis
 
-Im Testbetrieb duerfen keine echten personenbezogenen Daten verarbeitet werden. Das gilt insbesondere fuer Namen, E-Mail-Adressen, Telefonnummern, Rollenbeziehungen, Schulzuordnungen, Audit-Eintraege und Freitextfelder. Fuer Tests nur synthetische oder oeffentlich unkritische Beispieldaten verwenden.
+Im Testbetrieb dürfen keine echten personenbezogenen Daten verarbeitet werden. Das gilt insbesondere für Namen, E-Mail-Adressen, Telefonnummern, Rollenbeziehungen, Schulzuordnungen, Audit-Einträge und Freitextfelder. Für Tests nur synthetische oder öffentlich unkritische Beispieldaten verwenden.
 
 ## Sicherheitscheck vor jedem Commit
 
@@ -167,4 +167,4 @@ Vor einem Commit:
 git status --short
 ```
 
-Es duerfen keine lokalen Env-Dateien oder Zugangsdaten auftauchen. Falls versehentlich Secrets in eine versionierte Datei kopiert wurden, nicht committen und die Datei zuerst bereinigen.
+Es dürfen keine lokalen Env-Dateien oder Zugangsdaten auftauchen. Falls versehentlich Secrets in eine versionierte Datei kopiert wurden, nicht committen und die Datei zuerst bereinigen.
