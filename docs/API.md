@@ -78,6 +78,31 @@ GET /api/training-needs/export?districtId=district-unterallgaeu
 
 Ohne `districtId` bleibt das bisherige Verhalten unveraendert. Mit PostgreSQL werden Schulen direkt ueber `schools.district_id` und Bedarfsmeldungen ueber `training_needs -> schools.district_id` gefiltert.
 
+## Demo-Zugriffskontrolle
+
+Die API-Routen nutzen vorbereitend `src/lib/auth/accessControl.ts`. Es gibt weiterhin keine echte Authentifizierung, keine Sessions, keine Cookies und keine Passwoerter.
+
+Nur im Entwicklungsmodus (`NODE_ENV !== production`) kann fuer manuelle API-Tests ein Demo-User uebergeben werden:
+
+```http
+X-Demo-Role: coordinator
+```
+
+Alternativ ist fuer GET/Export-Tests `?demoRole=coordinator` moeglich. Diese Demo-User-Ermittlung ist ausdruecklich nicht produktiv sicher und dient nur dazu, die spaeteren Server-Pruefpunkte sichtbar vorzubereiten.
+
+Vorbereitete Rollenregeln:
+
+| Rolle | API-Verhalten im Demo-Kontext |
+|---|---|
+| `superadmin` | Darf alle Schulen, Bedarfsmeldungen und Exporte nutzen. |
+| `district_admin` | Darf Schulen und Bedarfsmeldungen im eigenen Bezirk lesen und exportieren. |
+| `coordinator` | Darf Bedarfsmeldungen im eigenen Bezirk sichten und exportieren. |
+| `school_user` | Darf nur die eigene Demo-Schule lesen und fuer diese Bedarf melden. |
+| `viewer` | Darf im eigenen Bezirk lesen; keine Bedarfsmeldung, kein Export. |
+| `public` | Keine geschuetzten API-Aktionen im Demo-Kontext. |
+
+Wenn kein Demo-User uebergeben wird, bleibt das bisherige API-Verhalten fuer Mock- und PostgreSQL-Modus kompatibel. Spaetere echte Auth kann an denselben `accessControl`-Funktionen andocken und die Demo-User-Aufloesung ersetzen.
+
 ## Beispiel: Bedarfsmeldung erstellen
 
 ```http

@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import * as schoolService from '@/lib/services/schoolService';
 import * as trainingNeedService from '@/lib/services/trainingNeedService';
+import {
+  canCreateTrainingNeed,
+  canViewDistrict,
+  canViewTrainingNeeds,
+  resolveDemoAccessUserFromRequest,
+  DEMO_ACCESS_CONTROL_NOTICE,
+} from '@/lib/auth/accessControl';
 import type { TrainingNeedFormat, TrainingNeedPriority } from '@/types/trainingNeed';
 
 const VALID_PRIORITIES: TrainingNeedPriority[] = ['hoch', 'mittel', 'niedrig'];
@@ -45,11 +52,31 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const districtId = url.searchParams.get('districtId')?.trim();
+    const demoUser = resolveDemoAccessUserFromRequest(request);
+
+    if (demoUser && districtId && !canViewDistrict(demoUser, districtId)) {
+      return NextResponse.json(
+        { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
+        { status: 403 },
+      );
+    }
+
     const trainingNeeds = districtId
       ? await trainingNeedService.getTrainingNeedsByDistrictAsync(districtId)
       : await trainingNeedService.getAllTrainingNeedEntriesAsync();
 
-    return NextResponse.json({ data: trainingNeeds });
+    if (!demoUser) return NextResponse.json({ data: trainingNeeds });
+
+    const schools = districtId
+      ? await schoolService.getSchoolsByDistrictAsync(districtId)
+      : await schoolService.getAllSchoolsAsync();
+    const schoolsById = new Map(schools.map((school) => [school.id, school]));
+    const allowedNeeds = trainingNeeds.filter((need) => {
+      const school = schoolsById.get(need.schoolId);
+      return school ? canViewTrainingNeeds(demoUser, school) : false;
+    });
+
+    return NextResponse.json({ data: allowedNeeds });
   } catch {
     return NextResponse.json(
       { error: 'Training needs could not be loaded' },
@@ -103,11 +130,19 @@ export async function POST(request: Request) {
   const validatedPriority = priority as TrainingNeedPriority;
   const validatedPreferredFormat = preferredFormat as TrainingNeedFormat;
   const school = await schoolService.getSchoolByIdAsync(schoolId!);
+  const demoUser = resolveDemoAccessUserFromRequest(request);
 
   if (!school) {
     return NextResponse.json(
       { error: 'Unknown schoolId' },
       { status: 400 },
+    );
+  }
+
+  if (demoUser && !canCreateTrainingNeed(demoUser, school.id, school)) {
+    return NextResponse.json(
+      { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
+      { status: 403 },
     );
   }
 

@@ -52,8 +52,8 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
       setForm(EMPTY_FORM);
       setOpen(false);
       setMessage('Bedarf wurde gespeichert');
-    } catch {
-      setMessage('Speichern fehlgeschlagen');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Speichern fehlgeschlagen');
     } finally {
       setIsSaving(false);
     }

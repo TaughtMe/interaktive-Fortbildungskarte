@@ -176,6 +176,20 @@ users   ──< audit_logs         (1 User : n Logeinträge, nullable)
 
 Legacy-Demo-Rollen bleiben kompatibel: `admin` und `leadership` werden fachlich wie `superadmin` behandelt, `school` wie `school_user`. Diese Abbildung erfolgt in `src/types/auth.ts` ueber `normalizeRole()`. Eine echte Login- oder Session-Logik ist nicht eingebaut.
 
+Die verbindliche Rollenlogik fuer UI und vorbereitete API-Pruefpunkte liegt in `src/lib/auth/accessControl.ts`:
+
+| Funktion | Erlaubt |
+|---|---|
+| Schule ansehen | `superadmin`; `district_admin`/`coordinator`/`viewer` im eigenen Bezirk; `school_user` nur eigene Schule |
+| Bezirk verwalten | `superadmin`; `district_admin` im eigenen Bezirk |
+| Koordination sichten | `superadmin`; `coordinator` im eigenen Bezirk |
+| Bedarf melden | `superadmin`; `school_user` nur eigene Schule |
+| Fortbildungsdaten an Schule bearbeiten | `superadmin`; `district_admin` im eigenen Bezirk; `school_user` eigene Schule |
+| Bedarfsmeldungen exportieren | `superadmin`; `district_admin`/`coordinator` im eigenen Bezirk |
+| Nur lesen | `viewer` im eigenen Bezirk |
+
+Im Demo-Modus werden diese Regeln frontendseitig sichtbar gemacht: Rollen ohne Berechtigung sehen Hinweise statt Formularen oder gesperrte Aktionen. API-Routen koennen im Entwicklungsmodus einen Demo-User ueber `X-Demo-Role` oder `demoRole` auswerten; das ist kein produktives Sicherheitsmodell.
+
 ---
 
 ## Was aktuell noch Mock-Daten sind

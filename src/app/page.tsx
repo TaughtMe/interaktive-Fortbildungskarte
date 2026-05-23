@@ -9,6 +9,13 @@ import { FORTBILDUNGEN_DEFAULT, SCHULEN, SCHULTYPEN } from '@/data/schools';
 import { fetchSchools } from '@/lib/api/schoolsApi';
 import { createTrainingNeedViaApi, fetchTrainingNeeds } from '@/lib/api/trainingNeedsApi';
 import { isApiModeEnabled } from '@/lib/config/runtimeMode';
+import {
+  canOpenSchoolPin,
+  canCreateTrainingNeed,
+  filterSchoolsForUser,
+  getAccessDeniedMessage,
+  getRoleCapabilitySummary,
+} from '@/lib/auth/accessControl';
 import Sidebar from '@/components/sidebar/Sidebar';
 import SchoolDetail from '@/components/detail/SchoolDetail';
 import CompareModal from '@/components/compare/CompareModal';
@@ -90,7 +97,7 @@ function getTabsForRole(role: Role) {
   const normalizedRole = normalizeRole(role);
   const extras: Record<Role, Tab[]> = {
     public:         [],
-    superadmin:     ['admin', 'overview'],
+    superadmin:     ['admin', 'inbox', 'overview'],
     district_admin: ['admin', 'inbox'],
     coordinator:    ['inbox'],
     school_user:    ['me'],
@@ -222,9 +229,13 @@ export default function Home() {
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
   const selectSchool = useCallback((s: School | null) => {
+    if (s && !canOpenSchoolPin(DEMO_USERS[role], s)) {
+      showToast(getAccessDeniedMessage(DEMO_USERS[role], 'openPin'));
+      return;
+    }
     setSelected(s);
     if (s && vpRef.current === 'mobile' && tabRef.current === 'liste') setTab('karte');
-  }, []);
+  }, [role]);
 
   function popupAction(
     action: 'close' | 'detail',
@@ -232,7 +243,13 @@ export default function Home() {
     origin?: { x: number; y: number },
   ) {
     if (action === 'close') setSelected(null);
-    if (action === 'detail' && school) setDetail({ school, origin: origin ?? null });
+    if (action === 'detail' && school) {
+      if (!canOpenSchoolPin(demoUser, school)) {
+        showToast(getAccessDeniedMessage(demoUser, 'openPin'));
+        return;
+      }
+      setDetail({ school, origin: origin ?? null });
+    }
   }
 
   function updateFortbildungen(id: string, data: SchoolFortbildungen) {
@@ -243,9 +260,14 @@ export default function Home() {
     schoolId: string,
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
   ) {
+    const school = schools.find((s) => s.id === schoolId) ?? SCHULEN.find((s) => s.id === schoolId);
+    if (!canCreateTrainingNeed(demoUser, schoolId, school)) {
+      throw new Error(getAccessDeniedMessage(demoUser, 'createNeed'));
+    }
+
     if (!useApi) return createMockTrainingNeed(schoolId, input);
 
-    const result = await createTrainingNeedViaApi(schoolId, input);
+    const result = await createTrainingNeedViaApi(schoolId, input, role);
     if (result.ok) return result.data;
 
     throw new Error(result.error.message);
@@ -262,10 +284,13 @@ export default function Home() {
 
   const demoUser = DEMO_USERS[role];
   const normalizedRole = normalizeRole(role);
+  const roleSchools = filterSchoolsForUser(demoUser, schools);
   const mySchool = demoUser.schoolId
     ? schools.find((s) => s.id === demoUser.schoolId) ?? SCHULEN.find((s) => s.id === demoUser.schoolId) ?? null
     : null;
   const myFortbildungen = mySchool ? (fortbildungen[mySchool.id] ?? { laufend: [], bedarf: [] }) : null;
+
+  const visibleSchoolsForDashboard = normalizedRole === 'superadmin' ? schools : roleSchools;
 
   return (
     <>
@@ -362,6 +387,9 @@ export default function Home() {
 
         {/* ── Demo role switcher ── */}
         <DemoRoleSwitcher role={role} onChange={setRole} />
+        <div className="role-capability-note">
+          {getRoleCapabilitySummary(role)}
+        </div>
 
         {/* ── Main content ── */}
         <main className="shell-main">
@@ -371,15 +399,20 @@ export default function Home() {
                 <SchoolDashboard school={mySchool} fortbildungen={myFortbildungen} />
               )}
               {tab === 'inbox' && (
-                <CoordinatorDashboard schools={schools} fortbildungen={fortbildungen} />
+                <CoordinatorDashboard
+                  schools={visibleSchoolsForDashboard}
+                  fortbildungen={fortbildungen}
+                  demoUser={demoUser}
+                  demoRole={role}
+                />
               )}
               {tab === 'admin' && (
                 normalizedRole === 'superadmin'
                   ? <SuperAdminDashboard schools={schools} fortbildungen={fortbildungen} />
-                  : <AdminDashboard schools={schools} />
+                  : <AdminDashboard schools={visibleSchoolsForDashboard} />
               )}
               {tab === 'overview' && (
-                <LeadershipDashboard schools={schools} fortbildungen={fortbildungen} />
+                <LeadershipDashboard schools={visibleSchoolsForDashboard} fortbildungen={fortbildungen} />
               )}
             </div>
           ) : (
@@ -493,6 +526,7 @@ export default function Home() {
           fortbildungen={fortbildungen}
           onUpdateFortbildungen={updateFortbildungen}
           onCreateTrainingNeed={createTrainingNeed}
+          accessUser={demoUser}
         />
       )}
 

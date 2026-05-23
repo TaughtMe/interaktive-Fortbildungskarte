@@ -439,6 +439,28 @@ input, select, textarea { font-family: inherit; }
   color: var(--ink); font-size: 12px; outline: none;
 }
 .demo-hint { color: var(--ink-4); font-size: 11px; margin-left: auto; flex-shrink: 0; }
+.role-capability-note {
+  padding: 6px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.access-note {
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  border: 1px dashed color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.access-note.compact {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+}
 
 /* ===== Dashboard layout ===== */
 .dashboard-wrap {

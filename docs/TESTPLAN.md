@@ -53,13 +53,17 @@ Erwartung: Im Mock-Modus wird lokal ein Bedarf angelegt. Im API-Modus wird zuers
 ## Rollenwechsel
 
 1. Demo-Rolle `public` pruefen.
-2. Auf `school` wechseln und "Meine Schule" pruefen.
-3. Auf `coordinator` wechseln und Koordinationsansicht pruefen.
-4. Auf `admin` wechseln und Verwaltungsansicht pruefen.
-5. Auf `leadership` wechseln und Gesamtueberblick pruefen.
-6. Neue Demo-Rollen `school_user`, `district_admin`, `viewer` und `superadmin` pruefen.
+2. Auf `school_user` wechseln und "Meine Schule" pruefen.
+3. Als `school_user` die eigene Demo-Schule `bb-gs` oeffnen und Bedarf melden.
+4. Als `school_user` eine andere Schule anklicken.
+5. Auf `viewer` wechseln und eine Schule im eigenen Bezirk oeffnen.
+6. Als `viewer` pruefen, dass statt "Bedarf melden" ein Hinweis erscheint.
+7. Auf `coordinator` wechseln und Koordinationsansicht inklusive CSV-Export pruefen.
+8. Auf `district_admin` wechseln und Verwaltungsansicht fuer den eigenen Bezirk pruefen.
+9. Auf `superadmin` wechseln und Superadmin-Funktionen pruefen.
+10. Legacy-Rollen `school`, `admin` und `leadership` als Kompatibilitaetscheck pruefen.
 
-Erwartung: Tabs passen zur Rolle. Es gibt keine echte Authentifizierung, keine Sessions, keine Cookies und keine Passwoerter.
+Erwartung: Tabs und Funktionen passen zur Rolle. Rollen ohne Berechtigung sehen Hinweise statt Formularen oder gesperrte Aktionen. Es gibt keine echte Authentifizierung, keine Sessions, keine Cookies und keine Passwoerter.
 
 ## Dashboards
 
@@ -90,11 +94,22 @@ curl "http://localhost:3000/api/training-needs/export?priority=hoch&sort=priorit
 curl http://localhost:3000/api/schools/unbekannte-schule
 ```
 
+Demo-Zugriffskontrolle im Entwicklungsmodus:
+
+```bash
+curl "http://localhost:3000/api/schools?districtId=district-memmingen&demoRole=coordinator"
+curl "http://localhost:3000/api/training-needs/export?demoRole=viewer&districtId=district-unterallgaeu"
+curl http://localhost:3000/api/schools/bb-gs -H "X-Demo-Role: school_user"
+```
+
+Erwartung: Koordinatoren duerfen nur den eigenen Demo-Bezirk lesen/exportieren, Viewer erhalten beim Export 403, `school_user` darf nur die eigene Demo-Schule abrufen.
+
 POST-Beispiel:
 
 ```bash
 curl -X POST http://localhost:3000/api/training-needs \
   -H "Content-Type: application/json" \
+  -H "X-Demo-Role: school_user" \
   -d '{
     "schoolId": "bb-gs",
     "topic": "Digitale Unterrichtsgestaltung",
@@ -111,9 +126,21 @@ Negativtests:
 curl -X POST http://localhost:3000/api/training-needs \
   -H "Content-Type: application/json" \
   -d '{"schoolId":"","topic":"","description":"","priority":"falsch","targetGroup":"","preferredFormat":"falsch"}'
+
+curl -X POST http://localhost:3000/api/training-needs \
+  -H "Content-Type: application/json" \
+  -H "X-Demo-Role: viewer" \
+  -d '{
+    "schoolId": "bb-gs",
+    "topic": "Nicht erlaubt",
+    "description": "Synthetischer Negativtest.",
+    "priority": "mittel",
+    "targetGroup": "Lehrkraefte",
+    "preferredFormat": "online"
+  }'
 ```
 
-Erwartung: Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error": "..." }`. Der Export liefert `text/csv` mit den dokumentierten Spalten. Unbekannte Schule bei `GET /api/schools/{id}` liefert 404; ungueltige Bedarfsmeldungen liefern 400.
+Erwartung: Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error": "..." }`. Der Export liefert `text/csv` mit den dokumentierten Spalten. Unbekannte Schule bei `GET /api/schools/{id}` liefert 404; ungueltige Bedarfsmeldungen liefern 400; im Demo-Kontext nicht erlaubte Aktionen liefern 403.
 
 ## Pruefbefehle
 

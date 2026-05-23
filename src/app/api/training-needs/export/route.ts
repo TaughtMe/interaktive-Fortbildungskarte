@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import * as schoolService from '@/lib/services/schoolService';
 import * as trainingNeedService from '@/lib/services/trainingNeedService';
 import { SCHULTYPEN } from '@/data/schools';
+import {
+  canExportTrainingNeeds,
+  resolveDemoAccessUserFromRequest,
+  DEMO_ACCESS_CONTROL_NOTICE,
+} from '@/lib/auth/accessControl';
+import { normalizeRole } from '@/types/auth';
 import { FORMAT_LABELS, PRIORITY_LABELS, type TrainingNeedPriority } from '@/types/trainingNeed';
 
 type SortMode = 'date-desc' | 'date-asc' | 'priority-desc' | 'priority-asc';
@@ -41,8 +47,18 @@ export async function GET(request: Request) {
     const priority = url.searchParams.get('priority')?.trim() ?? '';
     const schoolType = url.searchParams.get('schoolType')?.trim() ?? '';
     const location = url.searchParams.get('location')?.trim() ?? '';
-    const districtId = url.searchParams.get('districtId')?.trim() ?? '';
+    const requestedDistrictId = url.searchParams.get('districtId')?.trim() ?? '';
+    const demoUser = resolveDemoAccessUserFromRequest(request);
+    const demoRole = demoUser ? normalizeRole(demoUser.role) : null;
+    const districtId = requestedDistrictId || (demoUser && demoRole !== 'superadmin' ? demoUser.districtId ?? '' : '');
     const sortMode = normalizeSortMode(url.searchParams.get('sort'));
+
+    if (demoUser && !canExportTrainingNeeds(demoUser, districtId)) {
+      return NextResponse.json(
+        { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
+        { status: 403 },
+      );
+    }
 
     const [schools, trainingNeeds] = await Promise.all([
       districtId ? schoolService.getSchoolsByDistrictAsync(districtId) : schoolService.getAllSchoolsAsync(),

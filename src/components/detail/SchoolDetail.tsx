@@ -4,6 +4,15 @@ import type { School, SchoolFortbildungen } from '@/types';
 import type { TrainingNeed } from '@/types/trainingNeed';
 import { FORMAT_LABELS, PRIORITY_LABELS } from '@/types/trainingNeed';
 import { SCHULTYPEN } from '@/data/schools';
+import type { AccessUser } from '@/lib/auth/accessControl';
+import {
+  canCreateTrainingNeed,
+  canManageSchoolTraining,
+  canRemoveTrainingNeed,
+  canViewSchoolBasicInfo,
+  canViewTrainingNeeds,
+  getAccessDeniedMessage,
+} from '@/lib/auth/accessControl';
 import TrainingNeedForm from '@/components/training/TrainingNeedForm';
 
 interface Props {
@@ -18,14 +27,20 @@ interface Props {
     schoolId: string,
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
   ) => Promise<TrainingNeed> | TrainingNeed;
+  accessUser: AccessUser;
 }
 
 export default function SchoolDetail({
   school, origin, onClose, onCompareToggle, compared,
-  fortbildungen, onUpdateFortbildungen, onCreateTrainingNeed,
+  fortbildungen, onUpdateFortbildungen, onCreateTrainingNeed, accessUser,
 }: Props) {
   const t = SCHULTYPEN[school.typ];
   const data: SchoolFortbildungen = fortbildungen[school.id] ?? { laufend: [], bedarf: [] };
+  const mayViewBasicInfo = canViewSchoolBasicInfo(accessUser, school);
+  const mayViewTrainingNeeds = canViewTrainingNeeds(accessUser, school);
+  const mayCreateNeed = canCreateTrainingNeed(accessUser, school.id, school);
+  const mayManageTraining = canManageSchoolTraining(accessUser, school);
+  const mayRemoveNeed = canRemoveTrainingNeed(accessUser, school);
 
   const [closing, setClosing] = useState(false);
   const [opened, setOpened] = useState(false);
@@ -54,6 +69,7 @@ export default function SchoolDetail({
 
   function addLaufend(e: React.FormEvent) {
     e.preventDefault();
+    if (!mayManageTraining) return;
     if (!newLaufend.titel.trim()) return;
     onUpdateFortbildungen(school.id, {
       ...data,
@@ -70,6 +86,7 @@ export default function SchoolDetail({
   }
 
   function delLaufend(i: number) {
+    if (!mayManageTraining) return;
     onUpdateFortbildungen(school.id, {
       ...data,
       laufend: data.laufend.filter((_, idx) => idx !== i),
@@ -77,6 +94,7 @@ export default function SchoolDetail({
   }
 
   function addNeed(need: TrainingNeed) {
+    if (!mayCreateNeed) return;
     onUpdateFortbildungen(school.id, {
       ...data,
       bedarf: [...data.bedarf, { ...need, schoolId: school.id }],
@@ -84,6 +102,7 @@ export default function SchoolDetail({
   }
 
   function removeNeed(id: string) {
+    if (!mayRemoveNeed) return;
     onUpdateFortbildungen(school.id, {
       ...data,
       bedarf: data.bedarf.filter((n) => n.id !== id),
@@ -119,10 +138,12 @@ export default function SchoolDetail({
         </div>
 
         <div className="detail-body">
+          <>
           {/* Kontakt */}
           <div className="section">
             <div className="section-title">Kontakt</div>
-            <div className="kv-grid">
+            {mayViewBasicInfo ? (
+              <div className="kv-grid">
               <div className="kv">
                 <div className="k">Adresse</div>
                 <div className="v">{school.adresse}</div>
@@ -158,11 +179,18 @@ export default function SchoolDetail({
                 </div>
               </div>
             </div>
+            ) : (
+              <div className="access-note">
+                {getAccessDeniedMessage(accessUser, 'viewSchool')}
+              </div>
+            )}
           </div>
 
           {/* Laufende Fortbildungen */}
           <div className="section">
             <div className="section-title">Aktuelle Fortbildungen ({data.laufend.length})</div>
+            {mayViewTrainingNeeds ? (
+            <>
             <div className="fb-list">
               {data.laufend.length === 0 && (
                 <div style={{
@@ -186,14 +214,17 @@ export default function SchoolDetail({
                     <div className="fb-meta">{fb.teilnehmer} Teilnehmende · bis {fb.ende}</div>
                   </div>
                   <div />
+                  {mayManageTraining && (
                   <button className="fb-del" onClick={() => delLaufend(i)} title="Entfernen">
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
                       <path d="M3 5 H13 M6 5 V3 H10 V5 M5 5 V13 H11 V5" />
                     </svg>
                   </button>
+                  )}
                 </div>
               ))}
             </div>
+            {mayManageTraining ? (
             <form className="add-form" onSubmit={addLaufend}>
               <input
                 type="text"
@@ -214,11 +245,24 @@ export default function SchoolDetail({
                 Hinzufügen
               </button>
             </form>
+            ) : (
+              <div className="access-note">
+                {getAccessDeniedMessage(accessUser, 'manageTraining')}
+              </div>
+            )}
+            </>
+            ) : (
+              <div className="access-note">
+                {getAccessDeniedMessage(accessUser, 'viewTrainingNeeds')}
+              </div>
+            )}
           </div>
 
           {/* Fortbildungsbedarf */}
           <div className="section">
             <div className="section-title">Fortbildungsbedarf ({data.bedarf.length})</div>
+            {mayViewTrainingNeeds ? (
+            <>
             <div className="fb-list">
               {data.bedarf.length === 0 && (
                 <div style={{
@@ -250,20 +294,40 @@ export default function SchoolDetail({
                     </div>
                   </div>
                   <div className={`fb-pill ${b.priority}`}>{PRIORITY_LABELS[b.priority]}</div>
+                  {mayRemoveNeed && (
                   <button className="fb-del" onClick={() => removeNeed(b.id)} title="Entfernen">
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
                       <path d="M3 5 H13 M6 5 V3 H10 V5 M5 5 V13 H11 V5" />
                     </svg>
                   </button>
+                  )}
                 </div>
               ))}
             </div>
-            <TrainingNeedForm
+            {!mayRemoveNeed && data.bedarf.length > 0 && (
+              <div className="access-note">
+                {getAccessDeniedMessage(accessUser, 'removeNeed')}
+              </div>
+            )}
+            </>
+            ) : (
+              <div className="access-note">
+                {getAccessDeniedMessage(accessUser, 'viewTrainingNeeds')}
+              </div>
+            )}
+            {mayCreateNeed ? (
+              <TrainingNeedForm
               schoolId={school.id}
               onSubmit={addNeed}
               onCreateNeed={onCreateTrainingNeed}
-            />
+              />
+            ) : (
+              <div className="access-note">
+                {getAccessDeniedMessage(accessUser, 'createNeed')}
+              </div>
+            )}
           </div>
+          </>
         </div>
 
         <div className="detail-toolbar">

@@ -3,10 +3,15 @@ import { useMemo, useState } from 'react';
 import type { School, SchoolFortbildungen } from '@/types';
 import { SCHULTYPEN } from '@/data/schools';
 import { FORMAT_LABELS, PRIORITY_LABELS } from '@/types/trainingNeed';
+import type { AccessUser } from '@/lib/auth/accessControl';
+import { canExportTrainingNeeds, getAccessDeniedMessage } from '@/lib/auth/accessControl';
+import type { Role } from '@/types/auth';
 
 interface Props {
   schools: School[];
   fortbildungen: Record<string, SchoolFortbildungen>;
+  demoUser: AccessUser;
+  demoRole: Role;
 }
 
 type SortMode = 'date-desc' | 'date-asc' | 'priority-desc' | 'priority-asc';
@@ -17,7 +22,7 @@ const PRIORITY_WEIGHT = {
   niedrig: 1,
 };
 
-export default function CoordinatorDashboard({ schools, fortbildungen }: Props) {
+export default function CoordinatorDashboard({ schools, fortbildungen, demoUser, demoRole }: Props) {
   const [topicFilter, setTopicFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [schoolTypeFilter, setSchoolTypeFilter] = useState('');
@@ -85,6 +90,8 @@ export default function CoordinatorDashboard({ schools, fortbildungen }: Props) 
 
   function exportHref() {
     const params = new URLSearchParams();
+    if (demoUser?.districtId) params.set('districtId', demoUser.districtId);
+    params.set('demoRole', demoRole);
     if (topicFilter) params.set('topic', topicFilter);
     if (priorityFilter) params.set('priority', priorityFilter);
     if (schoolTypeFilter) params.set('schoolType', schoolTypeFilter);
@@ -97,6 +104,7 @@ export default function CoordinatorDashboard({ schools, fortbildungen }: Props) 
   const schoolTypeOptions = (['G', 'M', 'GM'] as const).filter((typ) =>
     schools.some((school) => school.typ === typ)
   );
+  const mayExport = canExportTrainingNeeds(demoUser, demoUser?.districtId ?? '');
 
   return (
     <div className="dashboard">
@@ -128,9 +136,13 @@ export default function CoordinatorDashboard({ schools, fortbildungen }: Props) 
               {visibleNeeds.length} von {allNeeds.length} Bedarfsmeldungen
             </div>
           </div>
-          <a className="btn compact" href={exportHref()}>
-            CSV exportieren
-          </a>
+          {mayExport ? (
+            <a className="btn compact" href={exportHref()}>
+              CSV exportieren
+            </a>
+          ) : (
+            <span className="access-note compact">{getAccessDeniedMessage(demoUser, 'export')}</span>
+          )}
         </div>
 
         <div className="dashboard-filters" aria-label="Bedarfsmeldungen filtern">

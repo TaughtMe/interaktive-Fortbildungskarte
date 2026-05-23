@@ -1,4 +1,5 @@
 import type { TrainingNeed } from '@/types/trainingNeed';
+import type { Role } from '@/types/auth';
 
 export interface ApiError {
   message: string;
@@ -57,11 +58,15 @@ export async function fetchTrainingNeeds(): Promise<ApiResult<TrainingNeed[]>> {
 export async function createTrainingNeedViaApi(
   schoolId: string,
   input: CreateTrainingNeedInput,
+  demoRole?: Role,
 ): Promise<ApiResult<TrainingNeed>> {
   try {
     const response = await fetch('/api/training-needs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(demoRole ? { 'x-demo-role': demoRole } : {}),
+      },
       body: JSON.stringify({ schoolId, ...input }),
     });
     const payload = await readJson<TrainingNeed>(response);
