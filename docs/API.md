@@ -13,6 +13,7 @@ NEXT_PUBLIC_USE_API=true npm run dev
 ```
 
 In diesem Modus lädt die UI Schulen über `GET /api/schools`, Fortbildungsbedarfe über `GET /api/training-needs` und sendet neue Bedarfsmeldungen über `POST /api/training-needs`.
+Der CSV-Export im Koordinationsdashboard nutzt `GET /api/training-needs/export`.
 
 Für dauerhafte PostgreSQL-Speicherung:
 
@@ -29,7 +30,40 @@ Wenn ein API-Fetch fehlschlägt oder eine unerwartete Antwort liefert, fällt di
 | `GET` | `/api/schools` | Gibt alle Schulen zurück. Im PostgreSQL-Modus aus `schools`. |
 | `GET` | `/api/schools/{id}` | Gibt eine einzelne Schule zurück. Im PostgreSQL-Modus aus `schools`. |
 | `GET` | `/api/training-needs` | Gibt alle Bedarfsmeldungen zurück. Im PostgreSQL-Modus aus `training_needs`. |
+| `GET` | `/api/training-needs/export` | Gibt Bedarfsmeldungen als CSV zurück. Im PostgreSQL-Modus aus `schools` und `training_needs`. |
 | `POST` | `/api/training-needs` | Validiert und erstellt eine Bedarfsmeldung. Im PostgreSQL-Modus dauerhaft in `training_needs`. |
+
+## CSV-Export
+
+```http
+GET /api/training-needs/export
+```
+
+Optionale Query-Parameter:
+
+| Parameter | Werte |
+|---|---|
+| `topic` | Exakter Themenname |
+| `priority` | `hoch`, `mittel`, `niedrig` |
+| `schoolType` | `G`, `M`, `GM` |
+| `location` | Exakter Ort |
+| `sort` | `date-desc`, `date-asc`, `priority-desc`, `priority-asc` |
+
+Exportierte Spalten:
+
+| Spalte | Inhalt |
+|---|---|
+| `Schule` | Schulname |
+| `Ort` | Schulort |
+| `Schulart` | Schulart-Label |
+| `Thema` | Bedarfsthema |
+| `Beschreibung` | Bedarfsbeschreibung |
+| `Priorität` | Priorität als Label |
+| `Zielgruppe` | Zielgruppe der Fortbildung |
+| `Format` | Gewünschtes Format |
+| `Datum` | Erstellungsdatum der Bedarfsmeldung |
+
+Der Export enthält keine Kontaktdaten, keine Namen von Leitungen, keine Benutzerkennung und keine Auth-/Sessiondaten.
 
 ## Beispiel: Bedarfsmeldung erstellen
 

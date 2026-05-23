@@ -64,10 +64,15 @@ Erwartung: Tabs passen zur Rolle. Es gibt keine echte Authentifizierung, keine S
 
 1. Schul-Dashboard mit Demo-Bedarf pruefen.
 2. Koordinationsdashboard mit mehreren Schulen pruefen.
-3. Admin-Dashboard oeffnen.
-4. Leadership-Dashboard oeffnen.
+3. Anzahl der sichtbaren Bedarfsmeldungen und Gesamtzahl pruefen.
+4. Filter nach Thema, Prioritaet, Schulart und Ort einzeln setzen und wieder entfernen.
+5. Sortierung nach Datum und Prioritaet pruefen.
+6. CSV-Export im Koordinationsdashboard ausloesen.
+7. Admin-Dashboard oeffnen.
+8. Leadership-Dashboard oeffnen.
+9. Anzahl Schulen, Anzahl Bedarfsmeldungen, haeufigste Themen und Prioritaetsverteilung pruefen.
 
-Erwartung: Dashboards verwenden dieselben Mock-/Service-Daten beziehungsweise im API-Modus die API-geladenen Schulen und Bedarfsmeldungen.
+Erwartung: Dashboards verwenden dieselben Mock-/Service-Daten beziehungsweise im API-Modus die API-geladenen Schulen und Bedarfsmeldungen. Der CSV-Export enthaelt Schule, Ort, Schulart, Thema, Beschreibung, Prioritaet, Zielgruppe, Format und Datum, aber keine personenbezogenen Zusatzdaten.
 
 ## API-Endpunkte
 
@@ -76,6 +81,8 @@ Bei laufendem Dev-Server:
 ```bash
 curl http://localhost:3000/api/schools
 curl http://localhost:3000/api/training-needs
+curl http://localhost:3000/api/training-needs/export
+curl "http://localhost:3000/api/training-needs/export?priority=hoch&sort=priority-desc"
 curl http://localhost:3000/api/schools/unbekannte-schule
 ```
 
@@ -102,13 +109,12 @@ curl -X POST http://localhost:3000/api/training-needs \
   -d '{"schoolId":"","topic":"","description":"","priority":"falsch","targetGroup":"","preferredFormat":"falsch"}'
 ```
 
-Erwartung: Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error": "..." }`. Unbekannte Schule bei `GET /api/schools/{id}` liefert 404; ungueltige Bedarfsmeldungen liefern 400.
+Erwartung: Erfolgsantworten haben `{ "data": ... }`, Fehlerantworten `{ "error": "..." }`. Der Export liefert `text/csv` mit den dokumentierten Spalten. Unbekannte Schule bei `GET /api/schools/{id}` liefert 404; ungueltige Bedarfsmeldungen liefern 400.
 
 ## Pruefbefehle
 
 ```bash
 npm run typecheck
-npm run db:pg:check
 npm run build
 npm run verify
 ```

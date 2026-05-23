@@ -7,6 +7,7 @@ Interaktive Next.js-App zur Sichtung von Schulen und Fortbildungsbedarfen im Sch
 - Aktive App: Next.js unter `src/`
 - Standard-Datenquelle: Mock-/Staticdaten aus `src/data/schools.ts`
 - PostgreSQL/Supabase: bevorzugte Zielrichtung; API-Routen können dauerhaft aus PostgreSQL lesen und Bedarfsmeldungen schreiben
+- MVP-Bedienbarkeit: Koordinationsdashboard mit Bedarfsliste, Filtern, Sortierung und CSV-Export; Leadership-Dashboard mit einfachen Kennzahlen
 - Cloudflare D1: vorbereitete Alternative, nicht priorisierte Zielarchitektur
 - Legacy-Demo: nur Referenz unter `legacy/`
 - Keine produktive Authentifizierung, keine Sessions, keine Cookies, keine Passwörter
@@ -57,15 +58,20 @@ DATA_SOURCE=postgres NEXT_PUBLIC_USE_API=true npm run dev
 
 In diesem Modus laden `GET /api/schools` und `GET /api/training-needs` aus PostgreSQL. `POST /api/training-needs` speichert neue Bedarfsmeldungen dauerhaft.
 
+Das Koordinationsdashboard zeigt alle Bedarfsmeldungen mit Schule, Ort, Schulart, Beschreibung, Zielgruppe, Datum, Format und Priorität. Es kann nach Thema, Priorität, Schulart und Ort gefiltert sowie nach Datum oder Priorität sortiert werden. Der CSV-Export ist über `GET /api/training-needs/export` vorbereitet und enthält nur fachliche Bedarfsdaten: Schule, Ort, Schulart, Thema, Beschreibung, Priorität, Zielgruppe, Format und Datum.
+
+Das Leadership-Dashboard zeigt Anzahl der Schulen, Anzahl der Bedarfsmeldungen, häufigste Themen und Prioritätsverteilung.
+
 ## Prüfen
 
+Einzeln:
+
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm run build
-npm run db:pg:check
 ```
 
-Oder gesammelt:
+Gesammelt:
 
 ```bash
 npm run verify
