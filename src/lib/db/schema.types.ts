@@ -1,14 +1,14 @@
 /**
- * DB schema types — row shapes for future Cloudflare D1 / Drizzle tables.
+ * DB schema types — row shapes for prepared Drizzle tables.
  *
- * Naming convention: <Entity>Row = what a D1 SELECT returns.
+ * Naming convention: <Entity>Row = what a SQLite/D1-style SELECT returns.
  * Repositories map *Row → UI type; UI types live in src/types/.
  *
  * All IDs are string (UUID). Timestamps are ISO-8601 strings (D1 TEXT).
  * Nullable columns are typed as `string | null` (not `undefined`).
  *
- * TODO (Drizzle): Replace these interfaces with `typeof <table>.$inferSelect`
- *                 once src/lib/db/schema.ts is written.
+ * PostgreSQL Select/Insert types live in schema.pg.ts. The app still maps DB
+ * rows to UI types explicitly and stays on mock/static data by default.
  */
 
 import type { SchoolTypKey } from '@/types';
@@ -26,7 +26,7 @@ export interface SchoolRow {
   lng:        number;
   adresse:    string;
   tel:        string;
-  fax:        string | null;   // UI uses '' as fallback; D1 stores NULL
+  fax:        string | null;   // UI uses '' as fallback; DB stores NULL
   mail:       string;
   web:        string | null;
   leitung:    string | null;
@@ -50,7 +50,7 @@ export interface UserRow {
 // ── sessions ──────────────────────────────────────────────────────────────────
 // Future table: CREATE TABLE sessions (id TEXT PRIMARY KEY, ...)
 // Relationship: sessions.user_id → users.id
-// TODO (auth): Populate via Cloudflare Workers KV or D1 after login flow is built.
+// TODO (auth): Populate only after a separate auth/session concept is approved.
 export interface SessionRow {
   id:         string;
   user_id:    string;
@@ -100,7 +100,7 @@ export interface TrainingOfferRow {
 // ── audit_logs ────────────────────────────────────────────────────────────────
 // Future table: CREATE TABLE audit_logs (id TEXT PRIMARY KEY, ...)
 // Relationship: audit_logs.user_id → users.id (nullable for anonymous actions)
-// TODO (D1): Implement write path once auth + mutations are in place.
+// TODO (DB): Implement write path once auth + mutations are in place.
 export type AuditAction =
   | 'training_need.created'
   | 'training_need.updated'

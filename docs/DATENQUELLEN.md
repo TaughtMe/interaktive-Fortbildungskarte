@@ -1,7 +1,7 @@
 # Datenquellen
 
 Stand: 2026-05  
-Status: Vorbereitung fuer optionales D1; produktiv bleibt der Mock-Pfad.
+Status: Mock-Pfad aktiv. PostgreSQL/Supabase ist die bevorzugte Zielrichtung, D1 bleibt nur als vorbereitete Alternative im Repository.
 
 ## Modi
 
@@ -10,13 +10,13 @@ Die App kennt zwei Datenquellen:
 | Modus | Bedeutung |
 |-------|-----------|
 | `mock` | Verwendet die bestehenden Static-/Mockdaten aus `src/data/schools.ts` und den Demo-Initialzustand fuer Fortbildungsbedarfe. |
-| `d1` | Aktiviert den vorbereiteten D1-Pfad in der Repository-Schicht. Echte produktive Queries sind noch nicht verpflichtend verdrahtet. |
+| `d1` | Aktiviert den vorbereiteten D1-Pfad in der Repository-Schicht. D1 ist eine Alternative; echte produktive Queries sind nicht verdrahtet. |
 
 ## Standardverhalten
 
 Ohne Umgebungsvariable laeuft die App immer mit `mock`.
 
-Optional kann D1 explizit aktiviert werden:
+Optional kann der vorbereitete D1-Pfad explizit getestet werden:
 
 ```bash
 NEXT_PUBLIC_DATA_SOURCE=d1 npm run dev
@@ -43,11 +43,13 @@ Wenn `dataSource = d1` ist:
 - Falls kein Client vorhanden ist, fallen sie kontrolliert auf Mockdaten zurueck.
 - Falls ein Client vorhanden ist, sind die Stellen fuer spaetere echte Queries markiert; aktuell bleibt der Mock-Fallback aktiv, damit kein synchroner Client-UI-Pfad auf async D1 umgebaut werden muss.
 
-## Was fuer produktives D1 noch fehlt
+## Was fuer echte DB-Zugriffe noch fehlt
 
-- Server/API-Grenze fuer echte D1-Reads und Writes.
+- Server/API-Grenze fuer echte Datenbank-Reads und Writes.
 - Asynchrone Repository-/Service-Methoden oder API-Routen fuer `schools` und `training_needs`.
-- Nutzung der Mapper aus `src/lib/db/mappers/` fuer echte D1-Row-Shapes.
+- Nutzung der Mapper aus `src/lib/db/mappers/` fuer echte Row-Shapes.
 - Persistenter Write-Pfad fuer `createTrainingNeed()`.
 - Deployment-spezifische Bereitstellung des D1-Bindings `DB`.
 - Keine Authentifizierung in diesem Schritt: keine Sessions, Cookies, Passwoerter oder Login-Logik.
+
+PostgreSQL/Supabase wird fuer die naechste echte Datenbankanbindung bevorzugt. D1 bleibt technisch vorbereitet, aber nicht als aktive Zielarchitektur markiert.

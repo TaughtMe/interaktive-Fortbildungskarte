@@ -17,6 +17,7 @@ function readConfiguredDataSource(): string | undefined {
 }
 
 export function getDataSource(): DataSource {
+  // Mock remains the safe default; D1 is only a prepared alternative path.
   return normalizeDataSource(readConfiguredDataSource());
 }
 

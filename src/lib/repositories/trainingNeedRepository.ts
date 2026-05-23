@@ -11,7 +11,7 @@ export function createTrainingNeed(
   if (isD1DataSource()) {
     const db = getDbClient();
     if (db) {
-      // TODO (D1): Insert into `training_needs` on the server/API layer and return the mapped row.
+      // TODO (DB): Real writes need a server/API boundary; PostgreSQL/Supabase is preferred.
     }
     // Mock fallback keeps local Bedarfsmeldungen working without D1 bindings.
   }
@@ -30,7 +30,7 @@ export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
   if (isD1DataSource()) {
     const db = getDbClient();
     if (db) {
-      // TODO (D1): Query `training_needs`, group by `school_id`, and map rows via trainingNeedMapper.
+      // TODO (DB): Query `training_needs` through a server/API boundary and map rows to UI types.
     }
     // Mock fallback stays active until D1 reads are moved behind a server/API boundary.
   }
@@ -38,8 +38,7 @@ export function getTrainingNeeds(): Record<string, SchoolFortbildungen> {
   return initializeDemoData();
 }
 
-// Demo data: distributes FORTBILDUNGEN_DEFAULT across schools by index pattern.
-// TODO (D1): Remove entirely — initial state will come from SELECT queries at startup.
+// Demo data stays the default until a real server/API data source is activated.
 export function initializeDemoData(): Record<string, SchoolFortbildungen> {
   const map: Record<string, SchoolFortbildungen> = {};
   SCHULEN.forEach((s, i) => {

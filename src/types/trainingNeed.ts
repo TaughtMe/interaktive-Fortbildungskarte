@@ -1,7 +1,7 @@
 export type TrainingNeedFormat   = 'praesenz' | 'online' | 'schilf' | 'beratung';
 export type TrainingNeedPriority = 'hoch' | 'mittel' | 'niedrig';
 // Status lifecycle: open → acknowledged → fulfilled | closed
-// TODO (D1): stored as TEXT in training_needs.status; default 'open'
+// TODO (DB): stored in training_needs.status; default 'open'
 export type TrainingNeedStatus   = 'open' | 'acknowledged' | 'fulfilled' | 'closed';
 
 export const STATUS_LABELS: Record<TrainingNeedStatus, string> = {
@@ -34,7 +34,7 @@ export interface TrainingNeed {
   preferredFormat: TrainingNeedFormat;
   createdAt:       string;
   updatedAt:       string;
-  // Optional fields — absent in demo data, required in DB rows (TrainingNeedRow)
-  status?:         TrainingNeedStatus;  // TODO (D1): non-optional in DB, default 'open'
-  createdBy?:      string;              // TODO (D1): FK → users.id, NULL until auth exists
+  // Optional fields are absent in demo data, but required or nullable in DB rows.
+  status?:         TrainingNeedStatus;  // TODO (DB): non-optional in DB, default 'open'
+  createdBy?:      string;              // TODO (DB): FK -> users.id, NULL until auth exists
 }

@@ -3,6 +3,9 @@ import type { Role } from '@/types/auth';
 import type { SchoolTypKey, TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types';
 import type { AuditAction, TrainingOfferStatus } from './schema.types';
 
+// D1/SQLite schema for the prepared alternative path. PostgreSQL/Supabase is
+// represented separately in schema.pg.ts and remains the preferred target.
+
 export const schools = sqliteTable('schools', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

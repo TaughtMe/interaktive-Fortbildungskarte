@@ -3,6 +3,8 @@ import type { Role } from '@/types/auth';
 import type { SchoolTypKey, TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types';
 import type { AuditAction, TrainingOfferStatus } from './schema.types';
 
+// Preferred future database target for Supabase/PostgreSQL. This schema is
+// prepared only; the app still runs on mock/static data by default.
 // PostgreSQL preparation only. IDs intentionally stay text-based for now:
 // existing school IDs are stable semantic slugs, and this avoids a migration-only
 // UUID rewrite before a real Supabase/PostgreSQL connection exists.

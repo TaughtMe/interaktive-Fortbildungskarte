@@ -7,17 +7,23 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run db:pg:check && npm run build",
+    "verify:db": "npm run db:pg:check",
+    "verify:build": "npm run typecheck && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply schulamt-fortbildungskarte-local --local",
     "db:pg:generate": "drizzle-kit generate --config=drizzle.pg.config.ts",
     "db:pg:check": "drizzle-kit check --config=drizzle.pg.config.ts",
-    "db:pg:migrate": "drizzle-kit migrate --config=drizzle.pg.config.ts"
+    "db:pg:migrate": "drizzle-kit migrate --config=drizzle.pg.config.ts",
+    "db:pg:seed": "echo 'ACHTUNG: Seed veraendert die PostgreSQL-Testdatenbank. Nur mit bewusst gesetzter DATABASE_URL und SEED_PG_CONFIRM=seed-test-postgres nutzen.' && tsx scripts/seed-pg.ts"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
     "drizzle-orm": "^0.45.2",
     "leaflet": "^1.9.4",
     "next": "^16.2.6",
+    "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -28,6 +34,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "^16.2.6",
+    "tsx": "^4.22.3",
     "typescript": "^5",
     "wrangler": "^4.94.0"
   }

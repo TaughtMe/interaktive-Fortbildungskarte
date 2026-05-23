@@ -17,6 +17,7 @@ type GlobalWithD1 = typeof globalThis & {
 };
 
 export function getDbClient(): D1DatabaseClient | null {
+  // D1 bindings only exist on the server/worker side; browser code stays on mock data.
   if (typeof window !== 'undefined') return null;
 
   try {
