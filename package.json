@@ -20,6 +20,7 @@
     "db:pg:seed:school-codes": "echo 'ACHTUNG: Erstellt lokale Test-Zugriffscodes fuer Schulen. Nur mit bewusst gesetzter DATABASE_URL und SEED_SCHOOL_CODES_CONFIRM=seed-school-codes nutzen.' && tsx scripts/seed-school-codes.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
     "@types/leaflet": "^1.9.21",
     "drizzle-orm": "^0.45.2",
     "leaflet": "^1.9.4",
