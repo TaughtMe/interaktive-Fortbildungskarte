@@ -1,4 +1,5 @@
 import type { School } from '@/types';
+import type { Role } from '@/types/auth';
 
 export interface ApiError {
   message: string;
@@ -27,9 +28,12 @@ async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export async function fetchSchools(): Promise<ApiResult<School[]>> {
+export async function fetchSchools(demoRole?: Role): Promise<ApiResult<School[]>> {
   try {
-    const response = await fetch('/api/schools', { cache: 'no-store' });
+    const response = await fetch('/api/schools', {
+      cache: 'no-store',
+      headers: demoRole ? { 'x-demo-role': demoRole } : undefined,
+    });
     const payload = await readJson<School[]>(response);
 
     if (!response.ok) {

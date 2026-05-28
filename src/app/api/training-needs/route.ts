@@ -55,7 +55,14 @@ export async function GET(request: Request) {
     const districtId = url.searchParams.get('districtId')?.trim();
     const demoUser = resolveDemoAccessUserFromRequest(request);
 
-    if (demoUser && districtId && !canViewDistrict(demoUser, districtId)) {
+    if (!demoUser) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 },
+      );
+    }
+
+    if (districtId && !canViewDistrict(demoUser, districtId)) {
       return NextResponse.json(
         { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
         { status: 403 },
@@ -65,8 +72,6 @@ export async function GET(request: Request) {
     const trainingNeeds = districtId
       ? await trainingNeedService.getTrainingNeedsByDistrictAsync(districtId)
       : await trainingNeedService.getAllTrainingNeedEntriesAsync();
-
-    if (!demoUser) return NextResponse.json({ data: trainingNeeds });
 
     const schools = districtId
       ? await schoolService.getSchoolsByDistrictAsync(districtId)

@@ -37,7 +37,11 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.topic.trim() || !form.description.trim() || !form.targetGroup.trim() || !form.schoolCode.trim()) return;
+    const normalizedCode = form.schoolCode.trim().toUpperCase();
+    if (!form.topic.trim() || !form.description.trim() || !form.targetGroup.trim() || !normalizedCode) {
+      setMessage('Bitte fülle alle Pflichtfelder aus: Thema, Beschreibung, Zielgruppe und Zugriffscode.');
+      return;
+    }
 
     setIsSaving(true);
     setMessage(null);
@@ -49,7 +53,7 @@ export default function TrainingNeedForm({ schoolId, onSubmit, onCreateNeed }: P
         priority:        form.priority,
         targetGroup:     form.targetGroup.trim(),
         preferredFormat: form.preferredFormat,
-      }, form.schoolCode);
+      }, normalizedCode);
       onSubmit(need);
       setForm(EMPTY_FORM);
       setOpen(false);

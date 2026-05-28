@@ -30,9 +30,12 @@ async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export async function fetchTrainingNeeds(): Promise<ApiResult<TrainingNeed[]>> {
+export async function fetchTrainingNeeds(demoRole?: Role): Promise<ApiResult<TrainingNeed[]>> {
   try {
-    const response = await fetch('/api/training-needs', { cache: 'no-store' });
+    const response = await fetch('/api/training-needs', {
+      cache: 'no-store',
+      headers: demoRole ? { 'x-demo-role': demoRole } : undefined,
+    });
     const payload = await readJson<TrainingNeed[]>(response);
 
     if (!response.ok) {

@@ -107,7 +107,7 @@ function getTabsForRole(role: Role) {
     leadership:     ['overview'],
   };
   if (normalizedRole === 'public') return ALL_TABS.filter((t) => base.includes(t.key));
-  return ALL_TABS.filter((t) => [...base, ...extras[role]].includes(t.key));
+  return ALL_TABS.filter((t) => [...base, ...extras[normalizedRole]].includes(t.key));
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -128,13 +128,13 @@ export default function Home() {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [schools, setSchools] = useState<School[]>(SCHULEN);
   const useApi = isApiModeEnabled();
-
-  // Mock data remains the default. Optional API mode only hydrates over it.
+  const [schools, setSchools] = useState<School[]>(() => useApi ? [] : SCHULEN);
   const [fortbildungen, setFortbildungen] = useState<Record<string, SchoolFortbildungen>>(
-    initializeDemoData
+    () => useApi ? {} : initializeDemoData()
   );
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiLoading, setApiLoading] = useState(useApi);
 
   // Apply theme to <html>
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
@@ -154,27 +154,28 @@ export default function Home() {
     if (!useApi) return;
 
     let cancelled = false;
+    setApiLoading(true);
+    setApiError(null);
 
     async function loadApiData() {
       const [schoolsResult, trainingNeedsResult] = await Promise.all([
-        fetchSchools(),
-        fetchTrainingNeeds(),
+        fetchSchools(role),
+        fetchTrainingNeeds(role),
       ]);
 
       if (cancelled) return;
 
+      const errors: string[] = [];
+
       if (schoolsResult.ok) {
         setSchools(schoolsResult.data);
       } else {
-        console.warn('API schools fallback:', schoolsResult.error);
+        errors.push('Schulen konnten nicht geladen werden.');
       }
 
       if (trainingNeedsResult.ok) {
-        setFortbildungen((prev) => {
+        setFortbildungen(() => {
           const next: Record<string, SchoolFortbildungen> = {};
-          Object.entries(prev).forEach(([schoolId, data]) => {
-            next[schoolId] = { ...data, bedarf: [] };
-          });
           trainingNeedsResult.data.forEach((need) => {
             const existing = next[need.schoolId] ?? { laufend: [], bedarf: [] };
             next[need.schoolId] = { ...existing, bedarf: [...existing.bedarf, need] };
@@ -182,18 +183,24 @@ export default function Home() {
           return next;
         });
       } else {
-        console.warn('API training-needs fallback:', trainingNeedsResult.error);
+        errors.push('Fortbildungsbedarfe konnten nicht geladen werden.');
       }
+
+      setApiError(errors.length > 0 ? errors.join(' ') : null);
+      setApiLoading(false);
     }
 
     loadApiData().catch((error) => {
-      console.warn('API data fallback:', error);
+      if (!cancelled) {
+        setApiError(error instanceof Error ? error.message : 'Daten konnten nicht geladen werden.');
+        setApiLoading(false);
+      }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [useApi]);
+  }, [useApi, role]); // role included: API filters by role, reload on change
 
   const filtered = useMemo(
     () => {
@@ -391,6 +398,12 @@ export default function Home() {
         <div className="role-capability-note">
           {getRoleCapabilitySummary(role)}
         </div>
+        {apiLoading && (
+          <div className="api-status api-loading">Daten werden geladen …</div>
+        )}
+        {apiError && !apiLoading && (
+          <div className="api-status api-error">{apiError}</div>
+        )}
 
         {/* ── Main content ── */}
         <main className="shell-main">

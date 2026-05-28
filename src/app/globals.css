@@ -446,6 +446,20 @@ input, select, textarea { font-family: inherit; }
   color: var(--ink-3);
   font-size: 12px;
 }
+.api-status {
+  padding: 5px 16px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.api-loading {
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
+.api-error {
+  background: #fff0f0;
+  color: #b00;
+  border-color: #f5c2c2;
+}
 .access-note {
   padding: 10px 12px;
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));

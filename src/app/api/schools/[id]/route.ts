@@ -15,8 +15,16 @@ interface RouteContext {
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const school = await schoolService.getSchoolByIdAsync(id);
     const demoUser = resolveDemoAccessUserFromRequest(request);
+
+    if (!demoUser) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 },
+      );
+    }
+
+    const school = await schoolService.getSchoolByIdAsync(id);
 
     if (!school) {
       return NextResponse.json(
@@ -25,7 +33,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
-    if (demoUser && !canViewSchoolBasicInfo(demoUser, school)) {
+    if (!canViewSchoolBasicInfo(demoUser, school)) {
       return NextResponse.json(
         { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
         { status: 403 },

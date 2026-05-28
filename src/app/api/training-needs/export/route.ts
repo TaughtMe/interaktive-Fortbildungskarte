@@ -49,11 +49,19 @@ export async function GET(request: Request) {
     const location = url.searchParams.get('location')?.trim() ?? '';
     const requestedDistrictId = url.searchParams.get('districtId')?.trim() ?? '';
     const demoUser = resolveDemoAccessUserFromRequest(request);
-    const demoRole = demoUser ? normalizeRole(demoUser.role) : null;
-    const districtId = requestedDistrictId || (demoUser && demoRole !== 'superadmin' ? demoUser.districtId ?? '' : '');
+
+    if (!demoUser) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 },
+      );
+    }
+
+    const demoRole = normalizeRole(demoUser.role);
+    const districtId = requestedDistrictId || (demoRole !== 'superadmin' ? demoUser.districtId ?? '' : '');
     const sortMode = normalizeSortMode(url.searchParams.get('sort'));
 
-    if (demoUser && !canExportTrainingNeeds(demoUser, districtId)) {
+    if (!canExportTrainingNeeds(demoUser, districtId)) {
       return NextResponse.json(
         { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
         { status: 403 },
