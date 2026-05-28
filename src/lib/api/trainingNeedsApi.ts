@@ -30,11 +30,23 @@ async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export async function fetchTrainingNeeds(demoRole?: Role): Promise<ApiResult<TrainingNeed[]>> {
+/**
+ * Build request headers.
+ *
+ * Priority: Bearer token (production + dev) > x-demo-role (dev fallback only).
+ * The server ignores x-demo-role in production, so this is safe either way.
+ */
+function buildAuthHeaders(token?: string | null, demoRole?: Role): Record<string, string> {
+  if (token) return { 'Authorization': `Bearer ${token}` };
+  if (demoRole) return { 'x-demo-role': demoRole };
+  return {};
+}
+
+export async function fetchTrainingNeeds(token?: string | null, demoRole?: Role): Promise<ApiResult<TrainingNeed[]>> {
   try {
     const response = await fetch('/api/training-needs', {
       cache: 'no-store',
-      headers: demoRole ? { 'x-demo-role': demoRole } : undefined,
+      headers: buildAuthHeaders(token, demoRole),
     });
     const payload = await readJson<TrainingNeed[]>(response);
 
@@ -62,6 +74,7 @@ export async function createTrainingNeedViaApi(
   schoolId: string,
   input: CreateTrainingNeedInput,
   schoolCode: string,
+  token?: string | null,
   demoRole?: Role,
 ): Promise<ApiResult<TrainingNeed>> {
   try {
@@ -69,7 +82,7 @@ export async function createTrainingNeedViaApi(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(demoRole ? { 'x-demo-role': demoRole } : {}),
+        ...buildAuthHeaders(token, demoRole),
       },
       body: JSON.stringify({ schoolId, schoolCode, ...input }),
     });

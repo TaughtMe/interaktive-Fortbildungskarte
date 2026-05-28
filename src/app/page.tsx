@@ -9,6 +9,7 @@ import { FORTBILDUNGEN_DEFAULT, SCHULEN, SCHULTYPEN } from '@/data/schools';
 import { fetchSchools } from '@/lib/api/schoolsApi';
 import { createTrainingNeedViaApi, fetchTrainingNeeds } from '@/lib/api/trainingNeedsApi';
 import { isApiModeEnabled } from '@/lib/config/runtimeMode';
+import type { AccessUser } from '@/lib/auth/accessControl';
 import {
   canOpenSchoolPin,
   canCreateTrainingNeed,
@@ -16,10 +17,14 @@ import {
   getAccessDeniedMessage,
   getRoleCapabilitySummary,
 } from '@/lib/auth/accessControl';
+import { useAuth } from '@/hooks/useAuth';
+import AuthBar from '@/components/auth/AuthBar';
+import LoginModal from '@/components/auth/LoginModal';
 import Sidebar from '@/components/sidebar/Sidebar';
 import SchoolDetail from '@/components/detail/SchoolDetail';
 import CompareModal from '@/components/compare/CompareModal';
 import DemoRoleSwitcher from '@/components/auth/DemoRoleSwitcher';
+import SuperAdminPreview from '@/components/auth/SuperAdminPreview';
 import SchoolDashboard from '@/components/dashboard/SchoolDashboard';
 import CoordinatorDashboard from '@/components/dashboard/CoordinatorDashboard';
 import AdminDashboard from '@/components/dashboard/AdminDashboard';
@@ -128,6 +133,46 @@ export default function Home() {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+
+  const { accessToken, email: authEmail, loading: authLoading, signIn, signOut } = useAuth();
+
+  // Real backend profile — populated after login, cleared on logout.
+  const [currentUser, setCurrentUser] = useState<AccessUser>(null);
+
+  // UI-only preview role — lets an authenticated superadmin simulate other role views.
+  // Does NOT change backend permissions. Does NOT send x-demo-role to the server.
+  const [previewRole, setPreviewRole] = useState<Role | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setCurrentUser(null);
+      setPreviewRole(null); // clear preview on logout
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/me', {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+      .then((r) => r.json())
+      .then((body) => { if (!cancelled) setCurrentUser(body?.data ?? null); })
+      .catch(() => { if (!cancelled) setCurrentUser(null); });
+    return () => { cancelled = true; };
+  }, [accessToken]);
+
+  // ── Access layers ─────────────────────────────────────────────────────────────
+  // effectiveUser: real auth level — currentUser when logged in, demo fallback in dev.
+  const effectiveUser: AccessUser = currentUser ?? DEMO_USERS[role];
+  const effectiveRole: Role = currentUser ? (currentUser.role as Role) : role;
+
+  // viewUser: what the UI renders — effectiveUser, or a preview simulation.
+  // Preview is only available to genuinely authenticated superadmins.
+  // All API requests still use accessToken (effectiveUser level).
+  const canPreview = !!currentUser && normalizeRole(currentUser.role as Role) === 'superadmin';
+  const viewUser: AccessUser = (canPreview && previewRole) ? DEMO_USERS[previewRole] : effectiveUser;
+  const viewRole: Role = (viewUser?.role as Role) ?? 'public';
+
   const useApi = isApiModeEnabled();
   const [schools, setSchools] = useState<School[]>(() => useApi ? [] : SCHULEN);
   const [fortbildungen, setFortbildungen] = useState<Record<string, SchoolFortbildungen>>(
@@ -139,11 +184,11 @@ export default function Home() {
   // Apply theme to <html>
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
 
-  // When role changes, ensure current tab is still valid for the new role
+  // When view role changes (login, logout, or preview switch), ensure current tab is still valid
   useEffect(() => {
-    const available = getTabsForRole(role).map((t) => t.key);
+    const available = getTabsForRole(viewRole).map((t) => t.key);
     if (!available.includes(tab)) setTab('liste');
-  }, [role]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function showToast(msg: string) {
     setToast(msg);
@@ -159,8 +204,8 @@ export default function Home() {
 
     async function loadApiData() {
       const [schoolsResult, trainingNeedsResult] = await Promise.all([
-        fetchSchools(role),
-        fetchTrainingNeeds(role),
+        fetchSchools(accessToken, role),
+        fetchTrainingNeeds(accessToken, role),
       ]);
 
       if (cancelled) return;
@@ -200,7 +245,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [useApi, role]); // role included: API filters by role, reload on change
+  }, [useApi, role, accessToken]); // accessToken: reload when user logs in/out
 
   const filtered = useMemo(
     () => {
@@ -236,13 +281,13 @@ export default function Home() {
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
   const selectSchool = useCallback((s: School | null) => {
-    if (s && !canOpenSchoolPin(DEMO_USERS[role], s)) {
-      showToast(getAccessDeniedMessage(DEMO_USERS[role], 'openPin'));
+    if (s && !canOpenSchoolPin(viewUser, s)) {
+      showToast(getAccessDeniedMessage(viewUser, 'openPin'));
       return;
     }
     setSelected(s);
     if (s && vpRef.current === 'mobile' && tabRef.current === 'liste') setTab('karte');
-  }, [role]);
+  }, [viewUser]); // re-create when view user changes (login / logout / preview switch)
 
   function popupAction(
     action: 'close' | 'detail',
@@ -251,8 +296,8 @@ export default function Home() {
   ) {
     if (action === 'close') setSelected(null);
     if (action === 'detail' && school) {
-      if (!canOpenSchoolPin(demoUser, school)) {
-        showToast(getAccessDeniedMessage(demoUser, 'openPin'));
+      if (!canOpenSchoolPin(viewUser, school)) {
+        showToast(getAccessDeniedMessage(viewUser, 'openPin'));
         return;
       }
       setDetail({ school, origin: origin ?? null });
@@ -268,14 +313,18 @@ export default function Home() {
     input: Omit<TrainingNeed, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>,
     schoolCode: string,
   ) {
-    const school = schools.find((s) => s.id === schoolId) ?? SCHULEN.find((s) => s.id === schoolId);
-    if (!canCreateTrainingNeed(demoUser, schoolId, school)) {
-      throw new Error(getAccessDeniedMessage(demoUser, 'createNeed'));
+    // When a real Bearer token is present, skip the client-side demo check —
+    // the server enforces access control authoritatively.
+    if (!accessToken) {
+      const school = schools.find((s) => s.id === schoolId) ?? SCHULEN.find((s) => s.id === schoolId);
+      if (!canCreateTrainingNeed(effectiveUser, schoolId, school)) {
+        throw new Error(getAccessDeniedMessage(effectiveUser, 'createNeed'));
+      }
     }
 
     if (!useApi) return createMockTrainingNeed(schoolId, input);
 
-    const result = await createTrainingNeedViaApi(schoolId, input, schoolCode, role);
+    const result = await createTrainingNeedViaApi(schoolId, input, schoolCode, accessToken, role);
     if (result.ok) return result.data;
 
     throw new Error(result.error.message);
@@ -285,20 +334,19 @@ export default function Home() {
     .map((id) => schools.find((s) => s.id === id) ?? SCHULEN.find((s) => s.id === id))
     .filter((s): s is School => Boolean(s));
 
-  const visibleTabs = getTabsForRole(role);
+  const visibleTabs = getTabsForRole(viewRole);
   const isDashboardTab = !['liste', 'karte'].includes(tab);
   const showList = !isDashboardTab && (tab === 'liste' || (vp !== 'mobile' && tab === 'karte'));
   const showMap  = !isDashboardTab && (tab === 'karte' || (vp !== 'mobile' && tab === 'liste'));
 
-  const demoUser = DEMO_USERS[role];
-  const normalizedRole = normalizeRole(role);
-  const roleSchools = filterSchoolsForUser(demoUser, schools);
-  const mySchool = demoUser.schoolId
-    ? schools.find((s) => s.id === demoUser.schoolId) ?? SCHULEN.find((s) => s.id === demoUser.schoolId) ?? null
+  const normalizedViewRole = normalizeRole(viewRole);
+  const roleSchools = filterSchoolsForUser(viewUser, schools);
+  const mySchool = viewUser?.schoolId
+    ? schools.find((s) => s.id === viewUser.schoolId) ?? SCHULEN.find((s) => s.id === viewUser?.schoolId) ?? null
     : null;
   const myFortbildungen = mySchool ? (fortbildungen[mySchool.id] ?? { laufend: [], bedarf: [] }) : null;
 
-  const visibleSchoolsForDashboard = normalizedRole === 'superadmin' ? schools : roleSchools;
+  const visibleSchoolsForDashboard = normalizedViewRole === 'superadmin' ? schools : roleSchools;
 
   return (
     <>
@@ -390,14 +438,30 @@ export default function Home() {
               <option value="dot">Punkt</option>
               <option value="icon">Icon</option>
             </select>
+
+            <AuthBar
+              email={authEmail}
+              loading={authLoading}
+              onLoginClick={() => setShowLogin(true)}
+              onLogout={signOut}
+            />
           </div>
         </header>
 
-        {/* ── Demo role switcher ── */}
-        <DemoRoleSwitcher role={role} onChange={setRole} />
-        <div className="role-capability-note">
-          {getRoleCapabilitySummary(role)}
-        </div>
+        {/* ── Dev demo switcher — only when not authenticated ── */}
+        {process.env.NODE_ENV !== 'production' && !currentUser && (
+          <>
+            <DemoRoleSwitcher role={role} onChange={setRole} />
+            <div className="role-capability-note">
+              {getRoleCapabilitySummary(role)}
+            </div>
+          </>
+        )}
+
+        {/* ── Superadmin preview — authenticated superadmins only ── */}
+        {canPreview && (
+          <SuperAdminPreview previewRole={previewRole} onChange={setPreviewRole} />
+        )}
         {apiLoading && (
           <div className="api-status api-loading">Daten werden geladen …</div>
         )}
@@ -416,12 +480,12 @@ export default function Home() {
                 <CoordinatorDashboard
                   schools={visibleSchoolsForDashboard}
                   fortbildungen={fortbildungen}
-                  demoUser={demoUser}
-                  demoRole={role}
+                  demoUser={viewUser}
+                  demoRole={viewRole}
                 />
               )}
               {tab === 'admin' && (
-                normalizedRole === 'superadmin'
+                normalizedViewRole === 'superadmin'
                   ? <SuperAdminDashboard schools={schools} fortbildungen={fortbildungen} />
                   : <AdminDashboard schools={visibleSchoolsForDashboard} />
               )}
@@ -540,7 +604,7 @@ export default function Home() {
           fortbildungen={fortbildungen}
           onUpdateFortbildungen={updateFortbildungen}
           onCreateTrainingNeed={createTrainingNeed}
-          accessUser={demoUser}
+          accessUser={viewUser}
         />
       )}
 
@@ -556,6 +620,14 @@ export default function Home() {
 
       {/* ── Toast ── */}
       {toast && <div className="toast">{toast}</div>}
+
+      {/* ── Login modal ── */}
+      {showLogin && (
+        <LoginModal
+          onLogin={signIn}
+          onClose={() => setShowLogin(false)}
+        />
+      )}
     </>
   );
 }

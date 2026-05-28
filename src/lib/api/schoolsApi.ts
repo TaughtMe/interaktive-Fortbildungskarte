@@ -28,11 +28,23 @@ async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export async function fetchSchools(demoRole?: Role): Promise<ApiResult<School[]>> {
+/**
+ * Build request headers.
+ *
+ * Priority: Bearer token (production + dev) > x-demo-role (dev fallback only).
+ * The server ignores x-demo-role in production, so this is safe either way.
+ */
+function buildAuthHeaders(token?: string | null, demoRole?: Role): HeadersInit {
+  if (token) return { 'Authorization': `Bearer ${token}` };
+  if (demoRole) return { 'x-demo-role': demoRole };
+  return {};
+}
+
+export async function fetchSchools(token?: string | null, demoRole?: Role): Promise<ApiResult<School[]>> {
   try {
     const response = await fetch('/api/schools', {
       cache: 'no-store',
-      headers: demoRole ? { 'x-demo-role': demoRole } : undefined,
+      headers: buildAuthHeaders(token, demoRole),
     });
     const payload = await readJson<School[]>(response);
 
@@ -53,9 +65,12 @@ export async function fetchSchools(demoRole?: Role): Promise<ApiResult<School[]>
   }
 }
 
-export async function fetchSchoolById(id: string): Promise<ApiResult<School>> {
+export async function fetchSchoolById(id: string, token?: string | null, demoRole?: Role): Promise<ApiResult<School>> {
   try {
-    const response = await fetch(`/api/schools/${encodeURIComponent(id)}`, { cache: 'no-store' });
+    const response = await fetch(`/api/schools/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+      headers: buildAuthHeaders(token, demoRole),
+    });
     const payload = await readJson<School>(response);
 
     if (!response.ok) {
