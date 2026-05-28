@@ -4,9 +4,9 @@ import * as trainingNeedService from '@/lib/services/trainingNeedService';
 import { SCHULTYPEN } from '@/data/schools';
 import {
   canExportTrainingNeeds,
-  resolveDemoAccessUserFromRequest,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
+import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
 import { normalizeRole } from '@/types/auth';
 import { FORMAT_LABELS, PRIORITY_LABELS, type TrainingNeedPriority } from '@/types/trainingNeed';
 
@@ -48,20 +48,20 @@ export async function GET(request: Request) {
     const schoolType = url.searchParams.get('schoolType')?.trim() ?? '';
     const location = url.searchParams.get('location')?.trim() ?? '';
     const requestedDistrictId = url.searchParams.get('districtId')?.trim() ?? '';
-    const demoUser = resolveDemoAccessUserFromRequest(request);
+    const accessUser = await resolveAuthenticatedUser(request);
 
-    if (!demoUser) {
+    if (!accessUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 },
       );
     }
 
-    const demoRole = normalizeRole(demoUser.role);
-    const districtId = requestedDistrictId || (demoRole !== 'superadmin' ? demoUser.districtId ?? '' : '');
+    const accessRole = normalizeRole(accessUser.role);
+    const districtId = requestedDistrictId || (accessRole !== 'superadmin' ? accessUser.districtId ?? '' : '');
     const sortMode = normalizeSortMode(url.searchParams.get('sort'));
 
-    if (!canExportTrainingNeeds(demoUser, districtId)) {
+    if (!canExportTrainingNeeds(accessUser, districtId)) {
       return NextResponse.json(
         { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
         { status: 403 },
