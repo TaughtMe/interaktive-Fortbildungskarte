@@ -8,6 +8,7 @@ import {
   resolveDemoAccessUserFromRequest,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
+import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
 import type { TrainingNeedFormat, TrainingNeedPriority } from '@/types/trainingNeed';
 
 const VALID_PRIORITIES: TrainingNeedPriority[] = ['hoch', 'mittel', 'niedrig'];
@@ -53,16 +54,16 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const districtId = url.searchParams.get('districtId')?.trim();
-    const demoUser = resolveDemoAccessUserFromRequest(request);
+    const accessUser = await resolveAuthenticatedUser(request);
 
-    if (!demoUser) {
+    if (!accessUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 },
       );
     }
 
-    if (districtId && !canViewDistrict(demoUser, districtId)) {
+    if (districtId && !canViewDistrict(accessUser, districtId)) {
       return NextResponse.json(
         { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
         { status: 403 },
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
     const schoolsById = new Map(schools.map((school) => [school.id, school]));
     const allowedNeeds = trainingNeeds.filter((need) => {
       const school = schoolsById.get(need.schoolId);
-      return school ? canViewTrainingNeeds(demoUser, school) : false;
+      return school ? canViewTrainingNeeds(accessUser, school) : false;
     });
 
     return NextResponse.json({ data: allowedNeeds });
