@@ -1,5 +1,6 @@
-import { doublePrecision, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { DatabaseRole } from '@/types/auth';
+import type { ProductionRole } from './schema.types';
 import type { GeoJsonObject } from 'geojson';
 import type { SchoolTypKey, TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types';
 import type { AuditAction, TrainingOfferStatus } from './schema.types';
@@ -119,6 +120,34 @@ export const trainingOffers = pgTable('training_offers', {
   index('pg_training_offers_training_need_id_idx').on(table.training_need_id),
   index('pg_training_offers_status_idx').on(table.status),
   index('pg_training_offers_date_idx').on(table.date),
+]);
+
+// ── profiles ──────────────────────────────────────────────────────────────────
+// Verknüpft Supabase Auth Users (auth.users) mit App-Rollen und Zuordnungen.
+//
+// WICHTIG: profiles.id → auth.users(id) ON DELETE CASCADE wird NICHT über
+// references() abgebildet, weil auth.users im Supabase-internen auth-Schema
+// liegt und nicht von Drizzle verwaltet werden darf.
+// Der FK ist ausschließlich in der SQL-Migration (manuell) gesetzt.
+//
+// CHECK-Constraints (Produktivrollen, district/school-Pflicht) ebenfalls
+// nur in der SQL-Migration — Drizzle unterstützt keine custom CHECK-Constraints
+// über die pgTable-API auf diese Weise.
+export const profiles = pgTable('profiles', {
+  id:           uuid('id').primaryKey(),
+  email:        text('email').notNull(),
+  role:         text('role').$type<ProductionRole>().notNull(),
+  district_id:  text('district_id').references(() => districts.id),
+  school_id:    text('school_id').references(() => schools.id),
+  display_name: text('display_name'),
+  active:       boolean('active').notNull().default(true),
+  created_at:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('pg_profiles_role_idx').on(table.role),
+  index('pg_profiles_district_id_idx').on(table.district_id),
+  index('pg_profiles_school_id_idx').on(table.school_id),
+  index('pg_profiles_active_idx').on(table.active),
 ]);
 
 export const auditLogs = pgTable('audit_logs', {

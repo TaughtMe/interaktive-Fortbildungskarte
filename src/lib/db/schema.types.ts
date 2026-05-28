@@ -15,6 +15,31 @@ import type { SchoolTypKey } from '@/types';
 import type { TrainingNeedFormat, TrainingNeedPriority, TrainingNeedStatus } from '@/types/trainingNeed';
 import type { DatabaseRole } from '@/types/auth';
 
+// ── profiles ──────────────────────────────────────────────────────────────────
+// Produktionsrollen für echte Supabase Auth Nutzer.
+// public / admin / leadership / school sind reine Demo-/Legacy-Rollen
+// und dürfen nie in die profiles-Tabelle eingetragen werden.
+export type ProductionRole =
+  | 'superadmin'
+  | 'district_admin'
+  | 'coordinator'
+  | 'school_user'
+  | 'viewer';
+
+// profiles.id = auth.users.id (uuid)
+// FK auf auth.users(id) ON DELETE CASCADE — nur in SQL-Migration, nicht in Drizzle-Schema.
+export interface ProfileRow {
+  id:           string;         // uuid — entspricht auth.users.id
+  email:        string;
+  role:         ProductionRole;
+  district_id:  string | null;  // Pflicht für district_admin, coordinator
+  school_id:    string | null;  // Pflicht für school_user
+  display_name: string | null;
+  active:       boolean;
+  created_at:   string;
+  updated_at:   string;
+}
+
 export interface DistrictRow {
   id:               string;
   name:             string;
