@@ -5,7 +5,6 @@ import {
   canCreateTrainingNeed,
   canViewDistrict,
   canViewTrainingNeeds,
-  resolveDemoAccessUserFromRequest,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
 import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
@@ -113,7 +112,10 @@ export async function POST(request: Request) {
 
   const errors: Record<string, string> = {};
   const schoolId = readRequiredString(body, 'schoolId', errors);
-  const schoolCode = readRequiredString(body, 'schoolCode', errors);
+  // schoolCode ist optional: Auth-User brauchen ihn nicht; Schulen ohne Account nutzen ihn als Pilot-Gate.
+  const schoolCode = typeof body.schoolCode === 'string' && body.schoolCode.trim()
+    ? body.schoolCode.trim()
+    : null;
   const topic = readRequiredString(body, 'topic', errors);
   const description = readRequiredString(body, 'description', errors);
   const priority = readRequiredString(body, 'priority', errors);
@@ -138,7 +140,6 @@ export async function POST(request: Request) {
   const validatedPriority = priority as TrainingNeedPriority;
   const validatedPreferredFormat = preferredFormat as TrainingNeedFormat;
   const school = await schoolService.getSchoolByIdAsync(schoolId!);
-  const demoUser = resolveDemoAccessUserFromRequest(request);
 
   if (!school) {
     return NextResponse.json(
@@ -147,23 +148,40 @@ export async function POST(request: Request) {
     );
   }
 
-  if (demoUser && !canCreateTrainingNeed(demoUser, school.id, school)) {
+  const accessUser = await resolveAuthenticatedUser(request);
+
+  // Fall C: kein Auth-User und kein schoolCode → 401
+  if (!accessUser && !schoolCode) {
     return NextResponse.json(
-      { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
-      { status: 403 },
+      { error: 'Unauthorized' },
+      { status: 401 },
     );
   }
+
+  const input = {
+    topic: topic!,
+    description: description!,
+    priority: validatedPriority,
+    targetGroup: targetGroup!,
+    preferredFormat: validatedPreferredFormat,
+  };
 
   let trainingNeed;
 
   try {
-    trainingNeed = await trainingNeedService.createTrainingNeedWithSchoolCodeAsync(schoolId!, schoolCode!, {
-      topic: topic!,
-      description: description!,
-      priority: validatedPriority,
-      targetGroup: targetGroup!,
-      preferredFormat: validatedPreferredFormat,
-    });
+    if (accessUser) {
+      // Fall A: Auth-User — Rollenprüfung, dann direktes Erstellen ohne schoolCode
+      if (!canCreateTrainingNeed(accessUser, school.id, school)) {
+        return NextResponse.json(
+          { error: 'Forbidden', note: DEMO_ACCESS_CONTROL_NOTICE },
+          { status: 403 },
+        );
+      }
+      trainingNeed = await trainingNeedService.createTrainingNeedAsync(schoolId!, input);
+    } else {
+      // Fall B: kein Auth-User, schoolCode vorhanden (Fall-C-Gate stellt sicher: schoolCode !== null)
+      trainingNeed = await trainingNeedService.createTrainingNeedWithSchoolCodeAsync(schoolId!, schoolCode!, input);
+    }
   } catch (error) {
     if (error instanceof Error && error.message === 'INVALID_SCHOOL_ACCESS_CODE') {
       return NextResponse.json(
