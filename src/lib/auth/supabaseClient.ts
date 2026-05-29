@@ -22,7 +22,17 @@ export function getSupabaseClient() {
     );
   }
   if (!_client) {
-    _client = createClient(supabaseUrl, supabaseAnonKey);
+    _client = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Do NOT process URL hash fragments automatically.
+        // This app uses explicit setSession() after /api/auth/signin —
+        // no magic-link or OAuth callback flows run in the browser.
+        // Without this flag, a stale #error=access_denied&error_code=otp_expired
+        // hash in the URL would cause Supabase to fire SIGNED_OUT on every reload,
+        // clearing the valid localStorage session.
+        detectSessionInUrl: false,
+      },
+    });
   }
   return _client;
 }
