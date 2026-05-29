@@ -47,9 +47,40 @@ export interface AuthProvider {
    * Does NOT create a profiles row. The caller must call insertProfile()
    * immediately after and use deleteAuthUser() for cleanup on failure.
    *
-   * @throws {AuthProviderError} on failure.
+   * @throws {AuthProviderError} with code DUPLICATE_EMAIL if email exists.
+   * @throws {AuthProviderError} on other failures.
    */
   inviteUserByEmail(email: string): Promise<AuthProviderInviteResult>;
+
+  /**
+   * Creates an auth user with an explicit password (no invite email).
+   * Sets email_confirm = true — the account is immediately active.
+   *
+   * Used for:
+   *   - email_account with generated or manual password (no invite email flow)
+   *   - local_account (synthetic email: username@local.schulamt.invalid)
+   *
+   * Does NOT create a profiles row. The caller must call insertProfile()
+   * immediately after and use deleteAuthUser() for cleanup on failure.
+   *
+   * @throws {AuthProviderError} with code DUPLICATE_EMAIL if email exists.
+   * @throws {AuthProviderError} on other failures.
+   */
+  createUserWithPassword(params: { email: string; password: string }): Promise<AuthProviderInviteResult>;
+
+  /**
+   * Updates the password for an existing auth user.
+   *
+   * SECURITY: Only call after the caller has verified the request originates
+   * from the user themselves (e.g. via resolveProfileFromRequest + JWT verification).
+   * The Service Role is the technical mechanism — authorization is enforced by
+   * the caller, not this method.
+   *
+   * Never logs the password value.
+   *
+   * @throws {AuthProviderError} on failure.
+   */
+  updateUserPassword(userId: string, newPassword: string): Promise<void>;
 
   /**
    * Permanently deletes an auth user by ID.

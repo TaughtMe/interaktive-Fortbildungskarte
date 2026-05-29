@@ -31,6 +31,7 @@ import AdminDashboard from '@/components/dashboard/AdminDashboard';
 import LeadershipDashboard from '@/components/dashboard/LeadershipDashboard';
 import SuperAdminDashboard from '@/components/dashboard/SuperAdminDashboard';
 import SettingsPanel from '@/components/admin/SettingsPanel';
+import ChangePasswordRequiredModal from '@/components/auth/ChangePasswordRequiredModal';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
 
@@ -146,10 +147,15 @@ export default function Home() {
   // Does NOT change backend permissions. Does NOT send x-demo-role to the server.
   const [previewRole, setPreviewRole] = useState<Role | null>(null);
 
+  // Set to true when /api/me returns mustChangePassword === true.
+  // Cleared after a successful self-service password change.
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+
   useEffect(() => {
     if (!accessToken) {
       setCurrentUser(null);
       setPreviewRole(null); // clear preview on logout
+      setMustChangePassword(false);
       return;
     }
     let cancelled = false;
@@ -158,8 +164,19 @@ export default function Home() {
       cache: 'no-store',
     })
       .then((r) => r.json())
-      .then((body) => { if (!cancelled) setCurrentUser(body?.data ?? null); })
-      .catch(() => { if (!cancelled) setCurrentUser(null); });
+      .then((body) => {
+        if (!cancelled) {
+          const data = (body?.data ?? null) as (AccessUser & { mustChangePassword?: boolean }) | null;
+          setCurrentUser(data);
+          setMustChangePassword(data?.mustChangePassword === true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentUser(null);
+          setMustChangePassword(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [accessToken]);
 
@@ -659,6 +676,15 @@ export default function Home() {
           accessToken={accessToken}
           canCreate={!!currentUser && normalizeRole(currentUser.role as Role) === 'superadmin'}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* ── Forced password change — blocks all other UI (z-index 9999) ── */}
+      {!!currentUser && mustChangePassword && accessToken && (
+        <ChangePasswordRequiredModal
+          accessToken={accessToken}
+          onSuccess={() => setMustChangePassword(false)}
+          onLogout={signOut}
         />
       )}
     </>

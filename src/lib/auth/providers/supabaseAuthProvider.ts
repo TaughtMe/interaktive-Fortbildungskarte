@@ -48,8 +48,6 @@ export class SupabaseAuthProvider implements AuthProvider {
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email);
 
     if (error) {
-      // Detect duplicate-email errors.
-      // Supabase returns 422 for "Email address already registered".
       const isDuplicate =
         error.status === 422 ||
         error.status === 409 ||
@@ -75,6 +73,77 @@ export class SupabaseAuthProvider implements AuthProvider {
     }
 
     return { userId: data.user.id };
+  }
+
+  /**
+   * Creates an auth user with an explicit password (no invite email).
+   * email_confirm is set to true — the account is immediately active.
+   *
+   * Used for email_account with generated/manual password and for local_account.
+   *
+   * @throws {AuthProviderError} with code DUPLICATE_EMAIL if the email exists.
+   * @throws {AuthProviderError} with code UNKNOWN for all other failures.
+   */
+  async createUserWithPassword({ email, password }: { email: string; password: string }): Promise<AuthProviderInviteResult> {
+    const adminClient = this.createAdminClient();
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    if (error) {
+      const isDuplicate =
+        error.status === 422 ||
+        error.status === 409 ||
+        error.message?.toLowerCase().includes('already registered') ||
+        error.message?.toLowerCase().includes('already in use') ||
+        error.message?.toLowerCase().includes('unique constraint');
+
+      throw new AuthProviderError(
+        isDuplicate
+          ? 'E-Mail-Adresse wird bereits verwendet.'
+          : 'Konto konnte nicht erstellt werden.',
+        error,
+        isDuplicate ? 'DUPLICATE_EMAIL' : 'UNKNOWN',
+      );
+    }
+
+    if (!data?.user?.id) {
+      throw new AuthProviderError(
+        'Konto erstellt, aber Benutzer-ID konnte nicht ermittelt werden.',
+        undefined,
+        'UNKNOWN',
+      );
+    }
+
+    return { userId: data.user.id };
+  }
+
+  /**
+   * Updates the password of an existing auth user by UUID.
+   *
+   * Uses adminClient.auth.admin.updateUserById — requires SUPABASE_SERVICE_ROLE_KEY.
+   * This is correct for server-side password changes where the user's own session
+   * is not available as a cookie (we only have the Bearer token, not the refresh token).
+   *
+   * Never logs the password.
+   *
+   * @throws {AuthProviderError} on failure.
+   */
+  async updateUserPassword(userId: string, newPassword: string): Promise<void> {
+    const adminClient = this.createAdminClient();
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+
+    if (error) {
+      throw new AuthProviderError(
+        'Passwort konnte nicht geändert werden.',
+        error,
+        'UNKNOWN',
+      );
+    }
   }
 
   /**
