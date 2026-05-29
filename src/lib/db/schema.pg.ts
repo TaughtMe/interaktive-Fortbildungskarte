@@ -89,7 +89,8 @@ export const schoolAccessCodes = pgTable('school_access_codes', {
 export const trainingNeeds = pgTable('training_needs', {
   id: text('id').primaryKey(),
   school_id: text('school_id').notNull().references(() => schools.id),
-  created_by: text('created_by').references(() => users.id),
+  // Typ geändert text → uuid (Migration 0004). FK liegt in DB-Migration, nicht hier.
+  created_by: uuid('created_by'),
   topic: text('topic').notNull(),
   description: text('description').notNull(),
   priority: text('priority').$type<TrainingNeedPriority>().notNull(),
@@ -130,29 +131,44 @@ export const trainingOffers = pgTable('training_offers', {
 // liegt und nicht von Drizzle verwaltet werden darf.
 // Der FK ist ausschließlich in der SQL-Migration (manuell) gesetzt.
 //
-// CHECK-Constraints (Produktivrollen, district/school-Pflicht) ebenfalls
-// nur in der SQL-Migration — Drizzle unterstützt keine custom CHECK-Constraints
-// über die pgTable-API auf diese Weise.
+// CHECK-Constraints (Produktivrollen, district/school-Pflicht, local_requires_username)
+// und UNIQUE-Constraints (username, real_email) ebenfalls nur in der SQL-Migration —
+// Drizzle unterstützt keine custom CHECK-Constraints über pgTable-API.
+//
+// Phase 1 (Migration 0004): username, real_email, is_local_account,
+// must_change_password, last_login_at, created_by hinzugefügt.
 export const profiles = pgTable('profiles', {
-  id:           uuid('id').primaryKey(),
-  email:        text('email').notNull(),
-  role:         text('role').$type<ProductionRole>().notNull(),
-  district_id:  text('district_id').references(() => districts.id),
-  school_id:    text('school_id').references(() => schools.id),
-  display_name: text('display_name'),
-  active:       boolean('active').notNull().default(true),
-  created_at:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updated_at:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  id:                   uuid('id').primaryKey(),
+  email:                text('email').notNull(),
+  role:                 text('role').$type<ProductionRole>().notNull(),
+  district_id:          text('district_id').references(() => districts.id),
+  school_id:            text('school_id').references(() => schools.id),
+  display_name:         text('display_name'),
+  active:               boolean('active').notNull().default(true),
+  // ── Phase 1: Benutzerverwaltung v1 ──────────────────────────
+  username:             text('username'),
+  real_email:           text('real_email'),
+  is_local_account:     boolean('is_local_account').notNull().default(false),
+  must_change_password: boolean('must_change_password').notNull().default(false),
+  last_login_at:        timestamp('last_login_at', { withTimezone: true }),
+  // Self-Reference FK (profiles_created_by_fk) liegt in SQL-Migration 0004.
+  created_by:           uuid('created_by'),
+  // ────────────────────────────────────────────────────────────
+  created_at:           timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at:           timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('pg_profiles_role_idx').on(table.role),
   index('pg_profiles_district_id_idx').on(table.district_id),
   index('pg_profiles_school_id_idx').on(table.school_id),
   index('pg_profiles_active_idx').on(table.active),
+  index('pg_profiles_username_idx').on(table.username),
+  index('pg_profiles_is_local_account_idx').on(table.is_local_account),
 ]);
 
 export const auditLogs = pgTable('audit_logs', {
   id: text('id').primaryKey(),
-  user_id: text('user_id').references(() => users.id),
+  // Typ geändert text → uuid (Migration 0004). FK auf profiles liegt in DB-Migration.
+  user_id: uuid('user_id'),
   action: text('action').$type<AuditAction>().notNull(),
   entity_type: text('entity_type').notNull(),
   entity_id: text('entity_id').notNull(),
@@ -162,6 +178,29 @@ export const auditLogs = pgTable('audit_logs', {
   index('pg_audit_logs_user_id_idx').on(table.user_id),
   index('pg_audit_logs_entity_idx').on(table.entity_type, table.entity_id),
   index('pg_audit_logs_created_at_idx').on(table.created_at),
+]);
+
+// ── user_deletion_logs ────────────────────────────────────────────────────────
+// Löschprotokoll. Keine FKs auf deleted_user_id / deleted_by_id —
+// Einträge müssen nach User-Löschung dauerhaft lesbar bleiben.
+// auto_purge_at: Cleanup nach 12 Monaten (manuell oder via Cron).
+export const userDeletionLogs = pgTable('user_deletion_logs', {
+  id:               uuid('id').primaryKey().defaultRandom(),
+  deleted_user_id:  uuid('deleted_user_id').notNull(),
+  username:         text('username'),
+  email:            text('email'),
+  real_email:       text('real_email'),
+  display_name:     text('display_name'),
+  role:             text('role').notNull(),
+  deleted_by_id:    uuid('deleted_by_id').notNull(),
+  deleted_by_email: text('deleted_by_email').notNull(),
+  deleted_at:       timestamp('deleted_at', { withTimezone: true }).notNull().defaultNow(),
+  reason:           text('reason'),
+  auto_purge_at:    timestamp('auto_purge_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('user_deletion_logs_deleted_at_idx').on(table.deleted_at),
+  index('user_deletion_logs_auto_purge_at_idx').on(table.auto_purge_at),
+  index('user_deletion_logs_deleted_by_id_idx').on(table.deleted_by_id),
 ]);
 
 export type PgSchoolSelect = typeof schools.$inferSelect;
@@ -180,3 +219,5 @@ export type PgTrainingOfferSelect = typeof trainingOffers.$inferSelect;
 export type PgTrainingOfferInsert = typeof trainingOffers.$inferInsert;
 export type PgAuditLogSelect = typeof auditLogs.$inferSelect;
 export type PgAuditLogInsert = typeof auditLogs.$inferInsert;
+export type PgUserDeletionLogSelect = typeof userDeletionLogs.$inferSelect;
+export type PgUserDeletionLogInsert = typeof userDeletionLogs.$inferInsert;

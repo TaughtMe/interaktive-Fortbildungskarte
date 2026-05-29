@@ -28,16 +28,30 @@ export type ProductionRole =
 
 // profiles.id = auth.users.id (uuid)
 // FK auf auth.users(id) ON DELETE CASCADE — nur in SQL-Migration, nicht in Drizzle-Schema.
+//
+// email:      immer gesetzt — spiegelt auth.users.email (echt oder synthetisch).
+// real_email: optional — echte Kontakt-/Reset-E-Mail (nur bei Lokalkonten relevant).
+// username:   Benutzerkennung für Login ohne E-Mail (z. B. 'schule-babenhausen').
+// Phase 1 (Migration 0004): username, real_email, is_local_account,
+// must_change_password, last_login_at, created_by hinzugefügt.
 export interface ProfileRow {
-  id:           string;         // uuid — entspricht auth.users.id
-  email:        string;
-  role:         ProductionRole;
-  district_id:  string | null;  // Pflicht für district_admin, coordinator
-  school_id:    string | null;  // Pflicht für school_user
-  display_name: string | null;
-  active:       boolean;
-  created_at:   string;
-  updated_at:   string;
+  id:                   string;         // uuid — entspricht auth.users.id
+  email:                string;         // Auth-E-Mail (real oder synthetisch)
+  role:                 ProductionRole;
+  district_id:          string | null;  // Pflicht für district_admin, coordinator
+  school_id:            string | null;  // Pflicht für school_user
+  display_name:         string | null;
+  active:               boolean;
+  // ── Phase 1: Benutzerverwaltung v1 ──────────────────────────
+  username:             string | null;  // Benutzerkennung, eindeutig falls gesetzt
+  real_email:           string | null;  // echte Kontakt-/Reset-E-Mail, optional
+  is_local_account:     boolean;        // true = Lokalkonto ohne echte E-Mail
+  must_change_password: boolean;        // erzwingt Passwortwechsel beim nächsten Login
+  last_login_at:        string | null;  // ISO-8601 oder null
+  created_by:           string | null;  // uuid des erstellenden Superadmins, oder null
+  // ────────────────────────────────────────────────────────────
+  created_at:           string;
+  updated_at:           string;
 }
 
 export interface DistrictRow {
@@ -150,8 +164,8 @@ export interface TrainingOfferRow {
 }
 
 // ── audit_logs ────────────────────────────────────────────────────────────────
-// Future table: CREATE TABLE audit_logs (id TEXT PRIMARY KEY, ...)
-// Relationship: audit_logs.user_id → users.id (nullable for anonymous actions)
+// Relationship: audit_logs.user_id → profiles.id ON DELETE SET NULL (Migration 0004)
+// Typ user_id: uuid (nach Migration 0004, vorher text → users.id)
 // TODO (DB): Implement write path once auth + mutations are in place.
 export type AuditAction =
   | 'training_need.created'
@@ -164,10 +178,28 @@ export type AuditAction =
 
 export interface AuditLogRow {
   id:          string;
-  user_id:     string | null;
+  user_id:     string | null;  // uuid als string; FK → profiles.id ON DELETE SET NULL
   action:      AuditAction;
   entity_type: string;
   entity_id:   string;
   details:     string | null;  // JSON string; parse with JSON.parse() at read time
   created_at:  string;
+}
+
+// ── user_deletion_logs ────────────────────────────────────────────────────────
+// Löschprotokoll (Migration 0004). Keine FKs — Einträge bleiben nach User-Löschung erhalten.
+// auto_purge_at: für späteren Cleanup-Job nach 12 Monaten.
+export interface UserDeletionLogRow {
+  id:               string;         // uuid
+  deleted_user_id:  string;         // uuid des gelöschten Profils
+  username:         string | null;
+  email:            string | null;  // Auth-E-Mail zum Zeitpunkt der Löschung
+  real_email:       string | null;  // echte E-Mail zum Zeitpunkt der Löschung
+  display_name:     string | null;
+  role:             string;
+  deleted_by_id:    string;         // uuid des ausführenden Superadmins
+  deleted_by_email: string;
+  deleted_at:       string;         // ISO-8601
+  reason:           string | null;
+  auto_purge_at:    string;         // ISO-8601 — 12 Monate nach deleted_at
 }

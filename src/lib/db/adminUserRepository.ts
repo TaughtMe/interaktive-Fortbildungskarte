@@ -41,15 +41,22 @@ type ProfileSelectRow = typeof profiles.$inferSelect;
 function mapRow(row: ProfileSelectRow): ProfileRow | null {
   if (!VALID_ROLES.has(row.role)) return null;
   return {
-    id:           row.id,
-    email:        row.email,
-    role:         row.role as ProductionRole,
-    district_id:  row.district_id,
-    school_id:    row.school_id,
-    display_name: row.display_name,
-    active:       row.active,
-    created_at:   row.created_at.toISOString(),
-    updated_at:   row.updated_at.toISOString(),
+    id:                   row.id,
+    email:                row.email,
+    role:                 row.role as ProductionRole,
+    district_id:          row.district_id,
+    school_id:            row.school_id,
+    display_name:         row.display_name,
+    active:               row.active,
+    // Phase 1: neue Felder
+    username:             row.username ?? null,
+    real_email:           row.real_email ?? null,
+    is_local_account:     row.is_local_account,
+    must_change_password: row.must_change_password,
+    last_login_at:        row.last_login_at?.toISOString() ?? null,
+    created_by:           row.created_by ?? null,
+    created_at:           row.created_at.toISOString(),
+    updated_at:           row.updated_at.toISOString(),
   };
 }
 
