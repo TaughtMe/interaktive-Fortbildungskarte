@@ -30,6 +30,7 @@ import CoordinatorDashboard from '@/components/dashboard/CoordinatorDashboard';
 import AdminDashboard from '@/components/dashboard/AdminDashboard';
 import LeadershipDashboard from '@/components/dashboard/LeadershipDashboard';
 import SuperAdminDashboard from '@/components/dashboard/SuperAdminDashboard';
+import SettingsPanel from '@/components/admin/SettingsPanel';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
 
@@ -89,8 +90,8 @@ function useViewport(): Viewport {
 type Tab = 'liste' | 'karte' | 'me' | 'inbox' | 'admin' | 'overview';
 
 const ALL_TABS = [
-  { key: 'liste'    as Tab, label: 'Schulen',    d: 'M5 4 H14 M5 8 H14 M5 12 H14 M2 4 H2.5 M2 8 H2.5 M2 12 H2.5' },
-  { key: 'karte'    as Tab, label: 'Karte',      d: 'M2 4 L6 2 L10 4 L14 2 V12 L10 14 L6 12 L2 14 Z M6 2 V12 M10 4 V14' },
+  { key: 'liste'    as Tab, label: 'Schulen',      d: 'M5 4 H14 M5 8 H14 M5 12 H14 M2 4 H2.5 M2 8 H2.5 M2 12 H2.5' },
+  { key: 'karte'    as Tab, label: 'Karte',        d: 'M2 4 L6 2 L10 4 L14 2 V12 L10 14 L6 12 L2 14 Z M6 2 V12 M10 4 V14' },
   { key: 'me'       as Tab, label: 'Meine Schule', d: 'M8 2 L14 6 V14 H10 V10 H6 V14 H2 V6 Z' },
   { key: 'inbox'    as Tab, label: 'Koordination', d: 'M2 4 H14 V12 H2 Z M2 4 L8 9 L14 4' },
   { key: 'admin'    as Tab, label: 'Verwaltung',   d: 'M3 4 H13 M3 8 H13 M3 12 H8' },
@@ -134,6 +135,7 @@ export default function Home() {
   const [showCompare, setShowCompare] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const { accessToken, email: authEmail, loading: authLoading, signIn, signOut } = useAuth();
 
@@ -439,6 +441,28 @@ export default function Home() {
               <option value="icon">Icon</option>
             </select>
 
+            {/* Settings button — superadmin only, based on real auth (never preview) */}
+            {!!currentUser && normalizeRole(currentUser.role as Role) === 'superadmin' && (
+              <button
+                className="btn"
+                title="Einstellungen"
+                onClick={() => setShowSettings(true)}
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M13.05 6.74 L14.89 6.78 L14.89 9.22 L13.05 9.26 A5.2 5.2 0 0 1 11.61 11.74 L12.5 13.36 L10.39 14.58 L9.43 13 A5.2 5.2 0 0 1 6.57 13 L5.61 14.58 L3.5 13.36 L4.39 11.74 A5.2 5.2 0 0 1 2.96 9.26 L1.11 9.22 L1.11 6.78 L2.96 6.74 A5.2 5.2 0 0 1 4.39 4.26 L3.5 2.64 L5.61 1.42 L6.57 3 A5.2 5.2 0 0 1 9.43 3 L10.39 1.42 L12.5 2.64 L11.61 4.26 A5.2 5.2 0 0 1 13.05 6.74 Z" />
+                  <circle cx="8" cy="8" r="2.3" />
+                </svg>
+                {vp !== 'mobile' && <span style={{ fontSize: '13px' }}>Einstellungen</span>}
+              </button>
+            )}
+
             <AuthBar
               email={authEmail}
               loading={authLoading}
@@ -626,6 +650,15 @@ export default function Home() {
         <LoginModal
           onLogin={signIn}
           onClose={() => setShowLogin(false)}
+        />
+      )}
+
+      {/* ── Settings panel — superadmin only, real auth role ── */}
+      {showSettings && (
+        <SettingsPanel
+          accessToken={accessToken}
+          canCreate={!!currentUser && normalizeRole(currentUser.role as Role) === 'superadmin'}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </>
