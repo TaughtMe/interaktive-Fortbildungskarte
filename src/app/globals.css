@@ -164,6 +164,8 @@ input, select, textarea { font-family: inherit; }
 .btn svg { width: 14px; height: 14px; }
 .btn.icon { width: 32px; padding: 0; justify-content: center; }
 .btn.compact { height: 30px; padding: 0 10px; font-size: 12px; }
+.btn:disabled, .btn[disabled] { opacity: 0.38; cursor: not-allowed; pointer-events: auto; }
+.btn:disabled:hover, .btn[disabled]:hover { background: var(--surface); border-color: var(--border); color: var(--ink-2); }
 
 /* ===== Sidebar ===== */
 .sidebar {
