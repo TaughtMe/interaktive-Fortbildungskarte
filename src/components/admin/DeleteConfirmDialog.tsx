@@ -64,16 +64,8 @@ export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onCl
 
   return (
     <div
-      style={{
-        position:       'fixed',
-        inset:          0,
-        zIndex:         3000,
-        background:     'rgba(0, 0, 0, 0.55)',
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        padding:        '16px',
-      }}
+      className="login-backdrop"
+      onClick={onClose}
       role="dialog"
       aria-modal
       aria-label="Konto löschen"
