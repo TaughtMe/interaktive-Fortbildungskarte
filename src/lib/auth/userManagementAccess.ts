@@ -130,3 +130,42 @@ export function canUpdateProfile(actor: AccessUser, target: ProfileRow): boolean
 
   return false;
 }
+
+// ── Multi-Superadmin-Schutz helpers (P1) ─────────────────────────────────────
+//
+// These helpers mirror the server-side guards in
+// admin/users/[id]/route.ts and admin/users/[id]/reset-password/route.ts.
+// They exist purely to drive UI affordances (disabled buttons, tooltips,
+// friendly error text) — the backend remains authoritative and re-checks
+// every rule independently. `actorId` must always come from the real,
+// authenticated session (never from a preview/demo role).
+
+/**
+ * True if `target` is a superadmin account *other than* the actor's own.
+ * Used to disable/hide actions that the backend would reject with
+ * SUPERADMIN_PEER_ACTION_FORBIDDEN (delete, deactivate, role change,
+ * password reset on another superadmin).
+ */
+export function isSuperadminPeer(actorId: string | null, target: ProfileRow): boolean {
+  if (!actorId) return false;
+  return target.id !== actorId && normalizeRole(target.role) === 'superadmin';
+}
+
+/** User-facing German translations for the P1 Multi-Superadmin-Schutz error codes. */
+const ADMIN_ACTION_ERROR_MESSAGES: Record<string, string> = {
+  SUPERADMIN_PEER_ACTION_FORBIDDEN:
+    'Andere Superadmin-Konten können aus Sicherheitsgründen nicht direkt verändert werden.',
+  LAST_SUPERADMIN_REQUIRED:
+    'Es muss mindestens ein aktiver Superadmin erhalten bleiben.',
+};
+
+/**
+ * Translates a backend error code into a user-friendly German message.
+ * Unknown codes fall back to the code itself (or `fallback` if no code).
+ */
+export function describeAdminActionError(code: string | null | undefined, fallback: string): string {
+  if (code && code in ADMIN_ACTION_ERROR_MESSAGES) {
+    return ADMIN_ACTION_ERROR_MESSAGES[code];
+  }
+  return code ?? fallback;
+}

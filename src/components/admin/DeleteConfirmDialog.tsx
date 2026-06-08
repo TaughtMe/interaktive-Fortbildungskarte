@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { ProfileRow } from '@/lib/db/schema.types';
+import { describeAdminActionError } from '@/lib/auth/userManagementAccess';
 
 interface Props {
   /** The user to be deleted. */
@@ -49,7 +50,7 @@ export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onCl
 
       if (!res.ok) {
         const body = await res.json() as { error?: string };
-        setError(body?.error ?? 'Konto konnte nicht gelöscht werden.');
+        setError(describeAdminActionError(body?.error, 'Konto konnte nicht gelöscht werden.'));
         setDeleting(false);
         return;
       }

@@ -11,6 +11,11 @@ export async function GET(request: Request) {
     if (profile) {
       return NextResponse.json({
         data: {
+          // Profile UUID — needed by the frontend to recognize "this is my own
+          // account" (P1 Multi-Superadmin-Schutz: self- vs. peer-protection
+          // affordances in the Benutzerverwaltung UI). Always from the real
+          // session profile — never influenced by preview/demo roles.
+          id:                 profile.id,
           role:               profile.role,
           districtId:         profile.district_id         ?? null,
           schoolId:           profile.school_id           ?? null,
@@ -35,6 +40,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       data: {
+        // Demo mode carries no database profile — no stable id to expose.
+        id:                 null,
         role:               accessUser.role,
         districtId:         accessUser.districtId ?? null,
         schoolId:           accessUser.schoolId   ?? null,

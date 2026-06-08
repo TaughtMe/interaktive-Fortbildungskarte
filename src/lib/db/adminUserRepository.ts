@@ -196,6 +196,29 @@ export async function insertProfile(input: InsertProfileInput): Promise<ProfileR
   }
 }
 
+/**
+ * Returns the number of active (active = true) profiles with role = 'superadmin'.
+ *
+ * Used by the Multi-Superadmin-Schutz guards (P1) to enforce the
+ * "the system must never end up without an active superadmin" rule before
+ * destructive actions (delete, deactivate, role change away from superadmin).
+ *
+ * @throws on DB connection or query failure.
+ */
+export async function countActiveSuperadmins(): Promise<number> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const rows = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(and(eq(profiles.role, 'superadmin'), eq(profiles.active, true)));
+    return rows.length;
+  } finally {
+    await client.end();
+  }
+}
+
 // ── Single-profile lookup ─────────────────────────────────────────────────────
 
 /**

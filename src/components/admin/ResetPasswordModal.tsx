@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { ProfileRow } from '@/lib/db/schema.types';
+import { describeAdminActionError } from '@/lib/auth/userManagementAccess';
 
 type ResetMode = 'generate' | 'manual';
 
@@ -111,7 +112,7 @@ export default function ResetPasswordModal({ user, accessToken, onSuccess, onClo
       };
 
       if (!res.ok) {
-        setError(data?.error ?? 'Passwort konnte nicht zurückgesetzt werden.');
+        setError(describeAdminActionError(data?.error, 'Passwort konnte nicht zurückgesetzt werden.'));
         setSubmitting(false);
         return;
       }

@@ -2,12 +2,26 @@
 import { useEffect, useReducer, useState } from 'react';
 import type { ProfileRow, ProductionRole } from '@/lib/db/schema.types';
 import type { DistrictOption, SchoolOption } from '@/lib/db/adminUserRepository';
+import { describeAdminActionError } from '@/lib/auth/userManagementAccess';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   user:        ProfileRow;
   accessToken: string;
+  /**
+   * True when `user` is the actor's own account. The backend blocks role
+   * changes on the actor's own profile (self-protection) — the role select
+   * is locked here too so the resulting 403 is never surprising.
+   */
+  isSelf: boolean;
+  /**
+   * True when `user` is a superadmin account other than the actor's own.
+   * The backend blocks role changes (and deactivation) on peer superadmin
+   * accounts with 403 SUPERADMIN_PEER_ACTION_FORBIDDEN (P1
+   * Multi-Superadmin-Schutz) — the role select is locked here too.
+   */
+  isSuperadminPeer: boolean;
   onSaved:     (updated: ProfileRow) => void;
   onClose:     () => void;
 }
@@ -86,7 +100,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function EditUserModal({ user, accessToken, onSaved, onClose }: Props) {
+export default function EditUserModal({ user, accessToken, isSelf, isSuperadminPeer, onSaved, onClose }: Props) {
   const [form, dispatch] = useReducer(formReducer, buildInitialForm(user));
 
   const [districts,     setDistricts]     = useState<DistrictOption[]>([]);
@@ -182,7 +196,7 @@ export default function EditUserModal({ user, accessToken, onSaved, onClose }: P
       const responseBody = await res.json() as { data?: ProfileRow; error?: string };
 
       if (!res.ok) {
-        setError(responseBody?.error ?? `Fehler ${res.status}`);
+        setError(describeAdminActionError(responseBody?.error, `Fehler ${res.status}`));
         setSubmitting(false);
         return;
       }
@@ -198,7 +212,17 @@ export default function EditUserModal({ user, accessToken, onSaved, onClose }: P
 
   // ── Display label for user identity ───────────────────────────────────────
   const userLabel = user.display_name ?? user.username ?? user.email;
-  const isSelf = false; // Server enforces self-protection; no client-side block needed
+
+  // P1 Multi-Superadmin-Schutz: the backend rejects role changes on the
+  // actor's own profile (self-protection) and on other superadmin profiles
+  // (peer-protection, 403 SUPERADMIN_PEER_ACTION_FORBIDDEN). Lock the role
+  // select in both cases so the resulting error is never a surprise.
+  const roleLocked = isSelf || isSuperadminPeer;
+  const roleLockedHint = isSelf
+    ? 'Sie können Ihre eigene Rolle nicht ändern.'
+    : isSuperadminPeer
+      ? 'Andere Superadmin-Konten können aus Sicherheitsgründen nicht direkt verändert werden.'
+      : undefined;
 
   const isDisabled = submitting;
 
@@ -296,12 +320,18 @@ export default function EditUserModal({ user, accessToken, onSaved, onClose }: P
               className="login-input"
               value={form.role}
               onChange={(e) => dispatch({ type: 'SET_ROLE', value: e.target.value as ProductionRole })}
-              disabled={isDisabled || isSelf}
+              disabled={isDisabled || roleLocked}
+              title={roleLockedHint}
             >
               {ROLE_OPTIONS.map(({ value, label }) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            {roleLockedHint && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-muted, #888)', marginTop: '2px' }}>
+                {roleLockedHint}
+              </span>
+            )}
           </label>
 
           {/* Bezirk — only when role requires it */}

@@ -24,6 +24,10 @@ interface RouteContext {
  *   1. Verify actor is superadmin.
  *   2. Resolve/validate new password.
  *   3. Load target profile.
+ *   3b. P1 Self-protection: actor cannot reset their own password here
+ *       (use the regular self-service change-password flow instead).
+ *   3c. P1 Peer-protection: actor cannot reset another superadmin's password
+ *       → 403 SUPERADMIN_PEER_ACTION_FORBIDDEN.
  *   4. Update password via Supabase Service Role (admin.updateUserById).
  *   5. Set profiles.must_change_password = true.
  *   6. Return { data: ProfileRow, temporaryPassword, loginIdentifier }.
@@ -36,7 +40,8 @@ interface RouteContext {
  * Response 200: { data: ProfileRow, temporaryPassword: string, loginIdentifier: string }
  * Response 400: validation error
  * Response 401: no valid session
- * Response 403: insufficient role
+ * Response 403: insufficient role, self-protection, or peer-protection
+ *               (SUPERADMIN_PEER_ACTION_FORBIDDEN)
  * Response 404: target user not found
  * Response 500: Supabase or DB failure
  */
@@ -101,6 +106,25 @@ export async function POST(request: Request, { params }: RouteContext) {
     const target = await getProfileById(targetId);
     if (!target) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden.' }, { status: 404 });
+    }
+
+    // ── 4b. Self-protection (P1: Multi-Superadmin-Schutz) ─────────────────────
+    // A superadmin cannot reset their own password via the admin-reset flow —
+    // that would let them mint a fresh temporary password (and re-trigger
+    // must_change_password) for their own account, bypassing the regular
+    // self-service change-password flow.
+    if (target.id === actor.id) {
+      return NextResponse.json(
+        { error: 'Sie können Ihr eigenes Passwort nicht über den Admin-Reset zurücksetzen.' },
+        { status: 403 },
+      );
+    }
+
+    // ── 4c. Peer-protection (P1: Multi-Superadmin-Schutz) ─────────────────────
+    // A superadmin must not be able to reset another superadmin's password —
+    // avoids takeover/lockout scenarios in multi-superadmin setups.
+    if (normalizeRole(target.role) === 'superadmin') {
+      return NextResponse.json({ error: 'SUPERADMIN_PEER_ACTION_FORBIDDEN' }, { status: 403 });
     }
 
     // ── 5. Update password via Service Role ───────────────────────────────────

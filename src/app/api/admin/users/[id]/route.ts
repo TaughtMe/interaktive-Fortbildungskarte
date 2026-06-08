@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveProfileFromRequest, passwordChangeBlockResponse } from '@/lib/auth/serverAuth';
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabaseAuthProvider';
 import {
+  countActiveSuperadmins,
   getProfileById,
   getProfileByRealEmail,
   insertUserDeletionLog,
@@ -79,7 +80,15 @@ function isUniqueViolation(err: unknown, constraintName?: string): boolean {
  *
  * Guards:
  *   - Actor must be superadmin (resolved from Bearer JWT).
- *   - Actor cannot change their own role or active status.
+ *   - Actor cannot change their own role or active status (self-protection).
+ *   - P1 Multi-Superadmin-Schutz:
+ *       - Peer-protection: actor cannot change another superadmin's role, nor
+ *         deactivate them (active: false) → 403 SUPERADMIN_PEER_ACTION_FORBIDDEN.
+ *         Reactivating a peer (active: true) stays allowed.
+ *       - Last-superadmin rule (defensive): an action that would leave the
+ *         system without an active superadmin is blocked
+ *         → 403 LAST_SUPERADMIN_REQUIRED, even if it somehow slipped past the
+ *         self-/peer-protection above.
  *   - Role/scope consistency enforced (district_admin/coordinator need districtId,
  *     school_user needs schoolId — evaluated against effective values).
  *   - username and realEmail uniqueness enforced (pre-check + DB constraint).
@@ -87,7 +96,9 @@ function isUniqueViolation(err: unknown, constraintName?: string): boolean {
  * Response 200: { data: ProfileRow }
  * Response 400: validation error
  * Response 401: no valid session
- * Response 403: insufficient role or self-protection violation
+ * Response 403: insufficient role, self-protection, peer-protection
+ *               (SUPERADMIN_PEER_ACTION_FORBIDDEN), or last-superadmin
+ *               protection (LAST_SUPERADMIN_REQUIRED)
  * Response 404: target user not found
  * Response 409: username or realEmail already in use
  * Response 500: DB or Supabase failure
@@ -225,6 +236,42 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
     }
 
+    // ── 5b. Peer-protection (P1: Multi-Superadmin-Schutz) ─────────────────────
+    // A superadmin must not be able to deactivate or degrade *another*
+    // superadmin's account. This avoids mutual takeover/lockout scenarios in
+    // multi-superadmin setups. (Resetting a peer's password is guarded in the
+    // reset-password route.) Reactivating a peer (active: true) stays allowed —
+    // it only restores access and cannot be used for a takeover.
+    if (target.id !== actor.id && normalizeRole(target.role) === 'superadmin') {
+      if ('role' in updateInput) {
+        return NextResponse.json({ error: 'SUPERADMIN_PEER_ACTION_FORBIDDEN' }, { status: 403 });
+      }
+      if ('active' in updateInput && updateInput.active === false) {
+        return NextResponse.json({ error: 'SUPERADMIN_PEER_ACTION_FORBIDDEN' }, { status: 403 });
+      }
+    }
+
+    // ── 5c. Last-superadmin protection (defensive, P1) ────────────────────────
+    // Self- and peer-protection above already block every path that could strip
+    // the system of its last superadmin. This guard is an independent,
+    // actor-agnostic safety net in case those rules are ever relaxed: it checks
+    // — purely based on the resulting state — whether the action would leave
+    // zero active superadmins, and blocks it if so.
+    const wouldRemoveActiveSuperadmin =
+      normalizeRole(target.role) === 'superadmin' &&
+      target.active &&
+      (
+        ('role'   in updateInput && updateInput.role !== 'superadmin') ||
+        ('active' in updateInput && updateInput.active === false)
+      );
+
+    if (wouldRemoveActiveSuperadmin) {
+      const activeSuperadmins = await countActiveSuperadmins();
+      if (activeSuperadmins <= 1) {
+        return NextResponse.json({ error: 'LAST_SUPERADMIN_REQUIRED' }, { status: 403 });
+      }
+    }
+
     // ── 6. Role / scope consistency ───────────────────────────────────────────
     // Compute effective values: use updated value if provided, else target's current value.
     const effectiveRole       = updateInput.role      ?? target.role;
@@ -301,6 +348,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
  *   1. Verify actor is superadmin.
  *   2. Load target profile.
  *   3. Self-protection: actor cannot delete their own account.
+ *   3b. P1 Peer-protection: actor cannot delete another superadmin's account
+ *       → 403 SUPERADMIN_PEER_ACTION_FORBIDDEN.
+ *   3c. P1 Last-superadmin rule (defensive): refuses to delete the system's
+ *       last active superadmin → 403 LAST_SUPERADMIN_REQUIRED.
  *   4. Write deletion log (fail-first — abort if log insert fails).
  *   5. Delete Supabase Auth user via Service Role → FK CASCADE removes profile.
  *   6. training_needs.created_by is preserved via ON DELETE SET NULL.
@@ -309,8 +360,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
  * stops the deletion — never delete without a log entry.
  *
  * Response 200: { success: true }
+ * Response 400: self-protection violation (cannot delete own account)
  * Response 401: no valid session
- * Response 403: insufficient role
+ * Response 403: insufficient role, peer-protection (SUPERADMIN_PEER_ACTION_FORBIDDEN),
+ *               or last-superadmin protection (LAST_SUPERADMIN_REQUIRED)
  * Response 404: target user not found
  * Response 500: DB or Supabase failure
  */
@@ -341,6 +394,24 @@ export async function DELETE(request: Request, { params }: RouteContext) {
         { error: 'Sie können Ihr eigenes Konto nicht löschen.' },
         { status: 400 },
       );
+    }
+
+    // ── 3b. Peer-protection (P1: Multi-Superadmin-Schutz) ─────────────────────
+    // A superadmin must not be able to delete another superadmin's account —
+    // avoids mutual takeover/lockout scenarios in multi-superadmin setups.
+    if (normalizeRole(target.role) === 'superadmin') {
+      return NextResponse.json({ error: 'SUPERADMIN_PEER_ACTION_FORBIDDEN' }, { status: 403 });
+    }
+
+    // ── 3c. Last-superadmin protection (defensive, P1) ────────────────────────
+    // Self- and peer-protection above already block every path that could
+    // delete the system's last superadmin. This is an independent,
+    // actor-agnostic safety net in case those rules are ever relaxed.
+    if (normalizeRole(target.role) === 'superadmin' && target.active) {
+      const activeSuperadmins = await countActiveSuperadmins();
+      if (activeSuperadmins <= 1) {
+        return NextResponse.json({ error: 'LAST_SUPERADMIN_REQUIRED' }, { status: 403 });
+      }
     }
 
     // ── 4. Write deletion log FIRST ───────────────────────────────────────────

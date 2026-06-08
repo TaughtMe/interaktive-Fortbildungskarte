@@ -9,6 +9,12 @@ interface Props {
    * Derived from currentUser (real auth), never from previewRole.
    */
   canCreate: boolean;
+  /**
+   * UUID of the real, authenticated user's own profile — or null (demo mode /
+   * no profile). Passed through to UserManagementDashboard for P1
+   * Multi-Superadmin-Schutz self-detection. Never derived from preview roles.
+   */
+  currentUserId: string | null;
   onClose: () => void;
 }
 
@@ -22,7 +28,7 @@ interface Props {
  * The inner CreateUserModal (z-index: 3000) renders on top of this panel
  * (z-index: 2000) automatically because it uses position:fixed.
  */
-export default function SettingsPanel({ accessToken, canCreate, onClose }: Props) {
+export default function SettingsPanel({ accessToken, canCreate, currentUserId, onClose }: Props) {
   return (
     <div
       className="settings-backdrop"
@@ -60,6 +66,7 @@ export default function SettingsPanel({ accessToken, canCreate, onClose }: Props
           <UserManagementDashboard
             accessToken={accessToken}
             canCreate={canCreate}
+            currentUserId={currentUserId}
           />
         </div>
       </div>

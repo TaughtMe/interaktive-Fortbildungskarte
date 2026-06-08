@@ -143,6 +143,10 @@ export default function Home() {
   // Real backend profile — populated after login, cleared on logout.
   const [currentUser, setCurrentUser] = useState<AccessUser>(null);
 
+  // Real session profile UUID — used only for P1 Multi-Superadmin-Schutz
+  // self-detection in the Benutzerverwaltung UI (never derived from preview/demo).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   // UI-only preview role — lets an authenticated superadmin simulate other role views.
   // Does NOT change backend permissions. Does NOT send x-demo-role to the server.
   const [previewRole, setPreviewRole] = useState<Role | null>(null);
@@ -154,6 +158,7 @@ export default function Home() {
   useEffect(() => {
     if (!accessToken) {
       setCurrentUser(null);
+      setCurrentUserId(null);
       setPreviewRole(null); // clear preview on logout
       setMustChangePassword(false);
       return;
@@ -166,14 +171,16 @@ export default function Home() {
       .then((r) => r.json())
       .then((body) => {
         if (!cancelled) {
-          const data = (body?.data ?? null) as (AccessUser & { mustChangePassword?: boolean }) | null;
+          const data = (body?.data ?? null) as (AccessUser & { id?: string | null; mustChangePassword?: boolean }) | null;
           setCurrentUser(data);
+          setCurrentUserId(data?.id ?? null);
           setMustChangePassword(data?.mustChangePassword === true);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setCurrentUser(null);
+          setCurrentUserId(null);
           setMustChangePassword(false);
         }
       });
@@ -675,6 +682,7 @@ export default function Home() {
         <SettingsPanel
           accessToken={accessToken}
           canCreate={!!currentUser && normalizeRole(currentUser.role as Role) === 'superadmin'}
+          currentUserId={currentUserId}
           onClose={() => setShowSettings(false)}
         />
       )}

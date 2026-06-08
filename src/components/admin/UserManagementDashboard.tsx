@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ProfileRow, ProductionRole } from '@/lib/db/schema.types';
+import { describeAdminActionError, isSuperadminPeer } from '@/lib/auth/userManagementAccess';
 import CreateUserModal   from './CreateUserModal';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import EditUserModal     from './EditUserModal';
@@ -96,6 +97,12 @@ interface Props {
    * Based on the REAL session role — never derived from the preview role.
    */
   canCreate: boolean;
+  /**
+   * UUID of the real, authenticated user's own profile (or null in demo mode /
+   * when unresolved). Drives the P1 Multi-Superadmin-Schutz UI affordances
+   * (disabled buttons, tooltips) — always from the real session, never preview.
+   */
+  currentUserId: string | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -104,7 +111,7 @@ interface Props {
  * User management dashboard — list, search, filter, sort, create,
  * edit, activate/deactivate, reset password, and delete.
  */
-export default function UserManagementDashboard({ accessToken, canCreate }: Props) {
+export default function UserManagementDashboard({ accessToken, canCreate, currentUserId }: Props) {
   const [users,   setUsers]   = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -222,7 +229,7 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
       if (!res.ok) {
         setActionError({
           userId:  user.id,
-          message: body.error ?? 'Aktion fehlgeschlagen.',
+          message: describeAdminActionError(body.error, 'Aktion fehlgeschlagen.'),
         });
       } else {
         if (body.data) {
@@ -393,7 +400,39 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
               </div>
             ) : (
               <div className="dash-list">
-                {visibleUsers.map((user) => (
+                {visibleUsers.map((user) => {
+                  // ── P1 Multi-Superadmin-Schutz — UI affordances ─────────────
+                  // Mirrors the backend guards: self-protection (own account)
+                  // and peer-protection (other superadmin accounts). Always
+                  // derived from currentUserId (real session) — never preview.
+                  const isSelf            = !!currentUserId && user.id === currentUserId;
+                  const targetIsSuperadminPeer = isSuperadminPeer(currentUserId, user);
+                  const peerHint = 'Andere Superadmin-Konten können aus Sicherheitsgründen nicht direkt verändert werden.';
+
+                  const passwordBlocked = isSelf || targetIsSuperadminPeer;
+                  const passwordTitle = isSelf
+                    ? 'Eigenes Passwort über die normale Passwort-Änderung anpassen.'
+                    : targetIsSuperadminPeer
+                      ? peerHint
+                      : (!user.active ? 'Konto ist deaktiviert' : 'Passwort zurücksetzen');
+
+                  // Deactivation is blocked for self and for active superadmin peers;
+                  // re-activating a peer stays allowed (it only restores access).
+                  const toggleBlocked = isSelf || (targetIsSuperadminPeer && user.active);
+                  const toggleTitle = isSelf
+                    ? 'Sie können Ihr eigenes Konto nicht deaktivieren.'
+                    : (targetIsSuperadminPeer && user.active)
+                      ? peerHint
+                      : undefined;
+
+                  const deleteBlocked = isSelf || targetIsSuperadminPeer;
+                  const deleteTitle = isSelf
+                    ? 'Sie können Ihr eigenes Konto nicht löschen.'
+                    : targetIsSuperadminPeer
+                      ? peerHint
+                      : undefined;
+
+                  return (
                   <div key={user.id}>
                     <div
                       className="dash-item"
@@ -474,8 +513,8 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
                           type="button"
                           className="btn compact"
                           onClick={() => { setActionError(null); setResetPasswordUser(user); }}
-                          disabled={!!togglingId || !user.active}
-                          title={!user.active ? 'Konto ist deaktiviert' : 'Passwort zurücksetzen'}
+                          disabled={!!togglingId || !user.active || passwordBlocked}
+                          title={passwordTitle}
                           style={{ fontSize: '0.78rem' }}
                         >
                           Passwort
@@ -486,7 +525,8 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
                           type="button"
                           className="btn compact"
                           onClick={() => handleToggleActive(user)}
-                          disabled={togglingId === user.id}
+                          disabled={togglingId === user.id || toggleBlocked}
+                          title={toggleTitle}
                           style={{ fontSize: '0.78rem' }}
                         >
                           {togglingId === user.id
@@ -500,7 +540,8 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
                           type="button"
                           className="btn compact"
                           onClick={() => { setActionError(null); setDeleteUser(user); }}
-                          disabled={!!togglingId}
+                          disabled={!!togglingId || deleteBlocked}
+                          title={deleteTitle}
                           style={{
                             fontSize:    '0.78rem',
                             color:       'var(--color-danger, #dc2626)',
@@ -523,7 +564,8 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
                       </p>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -543,6 +585,8 @@ export default function UserManagementDashboard({ accessToken, canCreate }: Prop
         <EditUserModal
           user={editUser}
           accessToken={accessToken}
+          isSelf={!!currentUserId && editUser.id === currentUserId}
+          isSuperadminPeer={isSuperadminPeer(currentUserId, editUser)}
           onSaved={handleEdited}
           onClose={() => setEditUser(null)}
         />
