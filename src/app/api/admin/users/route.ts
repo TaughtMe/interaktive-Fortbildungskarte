@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
+import { resolveAuthenticatedUser, resolveProfileFromRequest } from '@/lib/auth/serverAuth';
 import { AuthProviderError } from '@/lib/auth/authProvider';
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabaseAuthProvider';
 import { canListUsers, canViewProfile } from '@/lib/auth/userManagementAccess';
@@ -9,64 +9,125 @@ import {
   getProfilesBySchoolId,
   insertProfile,
 } from '@/lib/db/adminUserRepository';
-import type { ProductionRole } from '@/lib/db/schema.types';
+import type { InsertProfileInput } from '@/lib/db/adminUserRepository';
+import { getProfileByUsername } from '@/lib/db/profileRepository';
+import type { ProductionRole, ProfileRow } from '@/lib/db/schema.types';
 import { normalizeRole } from '@/types/auth';
+import { generateTemporaryPassword } from '@/lib/auth/generatePassword';
 
-// ── Shared validation ─────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type AccountType        = 'email_account' | 'local_account';
+type CredentialDelivery = 'invite_link' | 'generated_password_show_admin' | 'manual_password';
+
+/**
+ * Valid accountType + credentialDelivery combinations.
+ *
+ * local_account + invite_link is not permitted (no real e-mail to send to).
+ * generated_password_send_email is reserved for a future mail-delivery feature.
+ */
+const VALID_COMBINATIONS = new Set<string>([
+  'email_account+invite_link',
+  'email_account+generated_password_show_admin',
+  'email_account+manual_password',
+  'local_account+generated_password_show_admin',
+  'local_account+manual_password',
+]);
 
 const VALID_ROLES = new Set<ProductionRole>([
   'superadmin', 'district_admin', 'coordinator', 'school_user', 'viewer',
 ]);
 
-interface ValidatedCreateBody {
-  email:       string;
-  displayName: string | null;
-  role:        ProductionRole;
-  districtId:  string | null;
-  schoolId:    string | null;
-}
+// ── Validation helpers ────────────────────────────────────────────────────────
 
-function parseCreateBody(raw: unknown): ValidatedCreateBody | { error: string } {
-  if (typeof raw !== 'object' || raw === null) {
-    return { error: 'Ungültiges Anforderungsformat.' };
-  }
-
-  const b = raw as Record<string, unknown>;
-
-  const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
-  if (!email || !email.includes('@') || !email.includes('.')) {
-    return { error: 'Gültige E-Mail-Adresse erforderlich.' };
-  }
-
-  const role = typeof b.role === 'string' ? (b.role as ProductionRole) : null;
-  if (!role || !VALID_ROLES.has(role)) {
-    return { error: 'Ungültige Rolle.' };
-  }
-
-  const displayName =
-    typeof b.displayName === 'string' && b.displayName.trim()
-      ? b.displayName.trim()
-      : null;
-
-  const districtId =
-    typeof b.districtId === 'string' && b.districtId.trim()
-      ? b.districtId.trim()
-      : null;
-
-  const schoolId =
-    typeof b.schoolId === 'string' && b.schoolId.trim()
-      ? b.schoolId.trim()
-      : null;
-
-  // Enforce role-specific required fields
+function validateRoleAndScope(
+  role: ProductionRole,
+  districtId: string | null,
+  schoolId:   string | null,
+): { error: string } | null {
   if ((role === 'district_admin' || role === 'coordinator') && !districtId) {
     return { error: 'Bezirk ist für diese Rolle erforderlich.' };
   }
   if (role === 'school_user' && !schoolId) {
     return { error: 'Schule ist für diese Rolle erforderlich.' };
   }
+  return null;
+}
 
-  return { email, displayName, role, districtId, schoolId };
+const USERNAME_RE = /^[a-z0-9._-]+$/;
+
+function normalizeUsername(raw: string): { username: string } | { error: string } {
+  const t = raw.trim().toLowerCase();
+  if (!t) return { error: 'Benutzerkennung ist erforderlich.' };
+  if (t.length < 3)  return { error: 'Benutzerkennung muss mindestens 3 Zeichen lang sein.' };
+  if (t.length > 64) return { error: 'Benutzerkennung darf maximal 64 Zeichen lang sein.' };
+  if (!USERNAME_RE.test(t)) {
+    return {
+      error:
+        'Benutzerkennung darf nur Kleinbuchstaben (a–z), Ziffern (0–9), ' +
+        'Punkt (.), Bindestrich (-) und Unterstrich (_) enthalten.',
+    };
+  }
+  return { username: t };
+}
+
+function validateManualPassword(raw: unknown): { password: string } | { error: string } {
+  if (typeof raw !== 'string' || !raw) return { error: 'Passwort ist erforderlich.' };
+  if (raw.length < 8) return { error: 'Passwort muss mindestens 8 Zeichen lang sein.' };
+  return { password: raw };
+}
+
+// ── Unique-constraint detection ───────────────────────────────────────────────
+
+function isUniqueViolation(err: unknown, constraintName?: string): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as Record<string, unknown>;
+  if (e['code'] !== '23505') return false;
+  if (constraintName && e['constraint_name'] !== constraintName) return false;
+  return true;
+}
+
+// ── Shared two-step creation helper ──────────────────────────────────────────
+
+type CreateOutcome =
+  | { success: true;  profile: ProfileRow }
+  | { success: false; error: string; status: number };
+
+/**
+ * Step 1: createUserWithPassword (Supabase Admin, email_confirm=true).
+ * Step 2: insertProfile.
+ * On profile failure: deleteAuthUser + return appropriate error response.
+ *
+ * Never logs passwords.
+ */
+async function createWithPasswordAndProfile(
+  authEmail:    string,
+  password:     string,
+  profileData:  Omit<InsertProfileInput, 'id'>,
+): Promise<CreateOutcome> {
+  let userId: string;
+  try {
+    const r = await supabaseAuthProvider.createUserWithPassword({ email: authEmail, password });
+    userId = r.userId;
+  } catch (err) {
+    if (err instanceof AuthProviderError && err.code === 'DUPLICATE_EMAIL') {
+      return { success: false, error: 'E-Mail-Adresse wird bereits verwendet.', status: 409 };
+    }
+    throw err;
+  }
+
+  try {
+    const profile = await insertProfile({ id: userId, ...profileData });
+    return { success: true, profile };
+  } catch (profileErr) {
+    await supabaseAuthProvider.deleteAuthUser(userId).catch(() => { /* intentional */ });
+
+    if (isUniqueViolation(profileErr, 'profiles_username_unique')) {
+      return { success: false, error: 'Benutzerkennung ist bereits vergeben.', status: 409 };
+    }
+
+    throw profileErr;
+  }
 }
 
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
@@ -80,9 +141,6 @@ function parseCreateBody(raw: unknown): ValidatedCreateBody | { error: string } 
  *   coordinator    — profiles in actor's district
  *   school_user    — profiles in actor's school
  *   viewer / public — 403
- *
- * A secondary canViewProfile() check is applied as defense-in-depth after the
- * repository query to ensure scope invariants hold even under edge cases.
  *
  * Response: { data: ProfileRow[] }
  * Errors:   { error: string }  with status 401 / 403 / 500
@@ -106,7 +164,6 @@ export async function GET(request: Request) {
       rawProfiles = await getAllProfiles();
     } else if (role === 'district_admin' || role === 'coordinator') {
       if (!actor.districtId) {
-        // district_admin / coordinator without a districtId is a data-integrity issue
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
       rawProfiles = await getProfilesByDistrictId(actor.districtId);
@@ -119,7 +176,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Defense-in-depth: secondary per-row canViewProfile check
     const data = rawProfiles.filter((p) => canViewProfile(actor, p));
 
     return NextResponse.json({ data });
@@ -133,75 +189,220 @@ export async function GET(request: Request) {
 /**
  * POST /api/admin/users
  *
- * V–VI light pilot: only superadmin may create users.
+ * Superadmin only. Request body:
+ * {
+ *   accountType:        "email_account" | "local_account",
+ *   credentialDelivery: "invite_link" | "generated_password_show_admin" | "manual_password",
+ *   email?:             string,       // required for email_account
+ *   username?:          string,       // required for local_account
+ *   displayName?:       string,
+ *   role:               ProductionRole,
+ *   districtId?:        string,
+ *   schoolId?:          string,
+ *   password?:          string,       // required for manual_password
+ * }
  *
- * Two-step creation with cleanup:
- *   1. inviteUserByEmail(email) — creates auth.users entry, sends invite email.
- *   2. insertProfile(...)       — creates profiles row with returned UUID.
- *   If step 2 fails → deleteAuthUser(userId) cleanup, return 500.
+ * Valid combinations:
+ *   email_account  + invite_link                 → inviteUserByEmail, must_change_password=false
+ *   email_account  + generated_password_show_admin → createUserWithPassword, must_change_password=true
+ *   email_account  + manual_password             → createUserWithPassword, must_change_password=true
+ *   local_account  + generated_password_show_admin → createUserWithPassword, must_change_password=true
+ *   local_account  + manual_password             → createUserWithPassword, must_change_password=true
  *
- * Request body: { email, displayName?, role, districtId?, schoolId? }
- * Response:     { data: ProfileRow }                with status 201
- * Errors:       { error: string }  with status 400 / 401 / 403 / 409 / 500
+ * Response for invite_link:   201 { data: ProfileRow }
+ * Response for password modes: 201 { data: ProfileRow, temporaryPassword: string, loginIdentifier: string }
+ * Errors: { error: string }  with status 400 / 401 / 403 / 409 / 500
  */
 export async function POST(request: Request) {
   try {
-    const actor = await resolveAuthenticatedUser(request);
+    // Require a real Supabase session — demo mode cannot create real accounts.
+    // Using resolveProfileFromRequest gives us actorProfile.id for created_by.
+    const actorProfile = await resolveProfileFromRequest(request);
 
-    if (!actor) {
+    if (!actorProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // V–VI light: only superadmin may create users.
-    // The request body must never influence the actor's permissions.
-    if (normalizeRole(actor.role) !== 'superadmin') {
+    if (normalizeRole(actorProfile.role) !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const rawBody = await request.json().catch(() => null);
-    const parsed = parseCreateBody(rawBody);
+    if (typeof rawBody !== 'object' || rawBody === null) {
+      return NextResponse.json({ error: 'Ungültiges Anforderungsformat.' }, { status: 400 });
+    }
+    const b = rawBody as Record<string, unknown>;
 
-    if ('error' in parsed) {
-      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    // ── Parse and validate accountType + credentialDelivery ───────────────────
+    const accountType        = typeof b.accountType        === 'string' ? b.accountType        as AccountType        : null;
+    const credentialDelivery = typeof b.credentialDelivery === 'string' ? b.credentialDelivery as CredentialDelivery : null;
+
+    if (!accountType || !credentialDelivery) {
+      return NextResponse.json(
+        { error: 'accountType und credentialDelivery sind erforderlich.' },
+        { status: 400 },
+      );
     }
 
-    const { email, displayName, role, districtId, schoolId } = parsed;
+    if (!VALID_COMBINATIONS.has(`${accountType}+${credentialDelivery}`)) {
+      return NextResponse.json(
+        { error: `Kombination „${accountType} + ${credentialDelivery}" ist nicht erlaubt.` },
+        { status: 400 },
+      );
+    }
 
-    // ── Step 1: create auth user ──────────────────────────────────────────────
-    let userId: string;
-    try {
-      const result = await supabaseAuthProvider.inviteUserByEmail(email);
-      userId = result.userId;
-    } catch (err) {
-      if (err instanceof AuthProviderError && err.code === 'DUPLICATE_EMAIL') {
-        return NextResponse.json(
-          { error: 'E-Mail-Adresse wird bereits verwendet.' },
-          { status: 409 },
-        );
+    // ── Parse common fields ────────────────────────────────────────────────────
+    const role = typeof b.role === 'string' ? (b.role as ProductionRole) : null;
+    if (!role || !VALID_ROLES.has(role)) {
+      return NextResponse.json({ error: 'Ungültige Rolle.' }, { status: 400 });
+    }
+
+    const displayName =
+      typeof b.displayName === 'string' && b.displayName.trim() ? b.displayName.trim() : null;
+    const districtId =
+      typeof b.districtId === 'string' && b.districtId.trim() ? b.districtId.trim() : null;
+    const schoolId =
+      typeof b.schoolId === 'string' && b.schoolId.trim() ? b.schoolId.trim() : null;
+
+    const scopeError = validateRoleAndScope(role, districtId, schoolId);
+    if (scopeError) return NextResponse.json(scopeError, { status: 400 });
+
+    const actorId = actorProfile.id;
+
+    // ── email_account + invite_link ────────────────────────────────────────────
+    if (accountType === 'email_account' && credentialDelivery === 'invite_link') {
+      const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+      if (!email || !email.includes('@') || !email.includes('.')) {
+        return NextResponse.json({ error: 'Gültige E-Mail-Adresse erforderlich.' }, { status: 400 });
       }
-      // Any other provider error → 500
-      throw err;
+
+      let userId: string;
+      try {
+        const r = await supabaseAuthProvider.inviteUserByEmail(email);
+        userId = r.userId;
+      } catch (err) {
+        if (err instanceof AuthProviderError && err.code === 'DUPLICATE_EMAIL') {
+          return NextResponse.json({ error: 'E-Mail-Adresse wird bereits verwendet.' }, { status: 409 });
+        }
+        throw err;
+      }
+
+      try {
+        const profile = await insertProfile({
+          id:                  userId,
+          email,
+          role,
+          districtId:          districtId ?? null,
+          schoolId:            schoolId   ?? null,
+          displayName:         displayName ?? null,
+          realEmail:           email,
+          isLocalAccount:      false,
+          mustChangePassword:  false,
+          createdBy:           actorId,
+        });
+        return NextResponse.json({ data: profile }, { status: 201 });
+      } catch (profileErr) {
+        await supabaseAuthProvider.deleteAuthUser(userId).catch(() => { /* intentional */ });
+        throw profileErr;
+      }
     }
 
-    // ── Step 2: create profiles row ───────────────────────────────────────────
-    // If this fails, the auth user must be deleted (cleanup).
-    try {
-      const profile = await insertProfile({
-        id:          userId,
+    // ── Remaining combinations all involve password creation ──────────────────
+
+    // Resolve password: generate or validate manual input
+    let resolvedPassword: string;
+    if (credentialDelivery === 'generated_password_show_admin') {
+      resolvedPassword = generateTemporaryPassword();
+    } else {
+      // manual_password
+      const v = validateManualPassword(b.password);
+      if ('error' in v) return NextResponse.json(v, { status: 400 });
+      resolvedPassword = v.password;
+    }
+
+    // ── email_account + (generated | manual) password ─────────────────────────
+    if (accountType === 'email_account') {
+      const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+      if (!email || !email.includes('@') || !email.includes('.')) {
+        return NextResponse.json({ error: 'Gültige E-Mail-Adresse erforderlich.' }, { status: 400 });
+      }
+
+      const outcome = await createWithPasswordAndProfile(email, resolvedPassword, {
         email,
         role,
-        districtId:  districtId ?? null,
-        schoolId:    schoolId  ?? null,
-        displayName: displayName ?? null,
+        districtId:         districtId ?? null,
+        schoolId:           schoolId   ?? null,
+        displayName:        displayName ?? null,
+        realEmail:          email,
+        isLocalAccount:     false,
+        mustChangePassword: true,
+        createdBy:          actorId,
       });
 
-      return NextResponse.json({ data: profile }, { status: 201 });
-    } catch (profileErr) {
-      // Cleanup: remove the auth user we just created to avoid orphaned accounts.
-      // Cleanup errors are swallowed — the original profileErr is propagated.
-      await supabaseAuthProvider.deleteAuthUser(userId).catch(() => { /* intentional */ });
-      throw profileErr;
+      if (!outcome.success) {
+        return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+      }
+
+      return NextResponse.json(
+        {
+          data:              outcome.profile,
+          temporaryPassword: resolvedPassword,
+          loginIdentifier:   email,
+        },
+        { status: 201 },
+      );
     }
+
+    // ── local_account + (generated | manual) password ─────────────────────────
+    // accountType === 'local_account' is guaranteed here by VALID_COMBINATIONS check
+    const rawUsername = typeof b.username === 'string' ? b.username : '';
+    const usernameResult = normalizeUsername(rawUsername);
+    if ('error' in usernameResult) {
+      return NextResponse.json({ error: usernameResult.error }, { status: 400 });
+    }
+    const username = usernameResult.username;
+
+    // Best-effort early duplicate check (race condition handled by DB unique constraint)
+    const existingByUsername = await getProfileByUsername(username);
+    if (existingByUsername) {
+      return NextResponse.json(
+        { error: `Benutzerkennung „${username}" ist bereits vergeben.` },
+        { status: 409 },
+      );
+    }
+
+    const syntheticEmail = `${username}@local.schulamt.invalid`;
+
+    const outcome = await createWithPasswordAndProfile(syntheticEmail, resolvedPassword, {
+      email:              syntheticEmail,
+      role,
+      districtId:         districtId ?? null,
+      schoolId:           schoolId   ?? null,
+      displayName:        displayName ?? null,
+      username,
+      realEmail:          null,
+      isLocalAccount:     true,
+      mustChangePassword: true,
+      createdBy:          actorId,
+    });
+
+    if (!outcome.success) {
+      // Remap synthetic-email duplicate to a username-collision message
+      const msg = outcome.status === 409
+        ? `Benutzerkennung „${username}" ist bereits vergeben.`
+        : outcome.error;
+      return NextResponse.json({ error: msg }, { status: outcome.status });
+    }
+
+    return NextResponse.json(
+      {
+        data:              outcome.profile,
+        temporaryPassword: resolvedPassword,
+        loginIdentifier:   username,
+      },
+      { status: 201 },
+    );
+
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

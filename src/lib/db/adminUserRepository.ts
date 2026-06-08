@@ -1,8 +1,8 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { getPostgresDatabaseUrl } from './postgresClient';
-import { districts, profiles, schools } from './schema.pg';
+import { districts, profiles, schools, userDeletionLogs } from './schema.pg';
 import type { ProductionRole, ProfileRow } from './schema.types';
 
 /**
@@ -133,13 +133,19 @@ export async function getProfilesBySchoolId(schoolId: string): Promise<ProfileRo
 // ── Write (Schritt V) ─────────────────────────────────────────────────────────
 
 export interface InsertProfileInput {
-  /** auth.users UUID — must match the ID returned by inviteUserByEmail. */
-  id:          string;
-  email:       string;
-  role:        ProductionRole;
-  districtId:  string | null;
-  schoolId:    string | null;
-  displayName: string | null;
+  /** auth.users UUID — must match the ID returned by inviteUserByEmail / createLocalUser. */
+  id:                  string;
+  email:               string;        // Auth email (real or synthetic for local accounts)
+  role:                ProductionRole;
+  districtId:          string | null;
+  schoolId:            string | null;
+  displayName:         string | null;
+  // Phase 4: local account fields (optional — defaults to email_invite behavior when omitted)
+  username?:           string | null; // Benutzerkennung (lowercase, unique)
+  realEmail?:          string | null; // Echte Kontakt-E-Mail (= email for email_invite, null for local)
+  isLocalAccount?:     boolean;       // true for username-based local accounts
+  mustChangePassword?: boolean;       // true forces password change on first login
+  createdBy?:          string | null; // UUID of the creating superadmin
 }
 
 /**
@@ -157,15 +163,21 @@ export async function insertProfile(input: InsertProfileInput): Promise<ProfileR
     const [row] = await db
       .insert(profiles)
       .values({
-        id:           input.id,
-        email:        input.email,
-        role:         input.role,
-        district_id:  input.districtId,
-        school_id:    input.schoolId,
-        display_name: input.displayName,
-        active:       true,
-        created_at:   now,
-        updated_at:   now,
+        id:                   input.id,
+        email:                input.email,
+        role:                 input.role,
+        district_id:          input.districtId,
+        school_id:            input.schoolId,
+        display_name:         input.displayName,
+        active:               true,
+        // Phase 4: local account fields
+        username:             input.username           ?? null,
+        real_email:           input.realEmail          ?? null,
+        is_local_account:     input.isLocalAccount     ?? false,
+        must_change_password: input.mustChangePassword ?? false,
+        created_by:           input.createdBy          ?? null,
+        created_at:           now,
+        updated_at:           now,
       })
       .returning();
 
@@ -179,6 +191,225 @@ export async function insertProfile(input: InsertProfileInput): Promise<ProfileR
     }
 
     return mapped;
+  } finally {
+    await client.end();
+  }
+}
+
+// ── Single-profile lookup ─────────────────────────────────────────────────────
+
+/**
+ * Loads a single profile by UUID.
+ * Returns null if the profile does not exist or has an unrecognized role.
+ *
+ * @throws on DB connection or query failure.
+ */
+export async function getProfileById(id: string): Promise<ProfileRow | null> {
+  if (!id) return null;
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const [row] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, id))
+      .limit(1);
+    if (!row) return null;
+    return mapRow(row);
+  } finally {
+    await client.end();
+  }
+}
+
+// ── Profile mutations (superadmin) ────────────────────────────────────────────
+
+/**
+ * Sets profiles.active for a user and updates updated_at.
+ * Returns the updated ProfileRow.
+ *
+ * @throws if the profile does not exist or on DB failure.
+ */
+export async function updateProfileActive(id: string, active: boolean): Promise<ProfileRow> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const [row] = await db
+      .update(profiles)
+      .set({ active, updated_at: new Date() })
+      .where(eq(profiles.id, id))
+      .returning();
+    if (!row) throw new Error(`[adminUserRepository] updateProfileActive: profile ${id} not found.`);
+    const mapped = mapRow(row);
+    if (!mapped) throw new Error(`[adminUserRepository] updateProfileActive: unrecognized role for profile ${id}.`);
+    return mapped;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Sets profiles.must_change_password for a user and updates updated_at.
+ * Returns the updated ProfileRow.
+ *
+ * @throws if the profile does not exist or on DB failure.
+ */
+export async function setMustChangePassword(id: string, value: boolean): Promise<ProfileRow> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const [row] = await db
+      .update(profiles)
+      .set({ must_change_password: value, updated_at: new Date() })
+      .where(eq(profiles.id, id))
+      .returning();
+    if (!row) throw new Error(`[adminUserRepository] setMustChangePassword: profile ${id} not found.`);
+    const mapped = mapRow(row);
+    if (!mapped) throw new Error(`[adminUserRepository] setMustChangePassword: unrecognized role for profile ${id}.`);
+    return mapped;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Admin update for all editable profile fields.
+ *
+ * Only the fields present in `input` are updated; others are left unchanged.
+ * `profiles.email` is intentionally NEVER touched — it mirrors auth.users.email.
+ *
+ * @throws if the profile does not exist or on DB failure.
+ */
+export interface UpdateProfileAdminInput {
+  displayName?: string | null;
+  role?:        ProductionRole;
+  districtId?:  string | null;
+  schoolId?:    string | null;
+  realEmail?:   string | null;
+  username?:    string | null;
+  active?:      boolean;
+}
+
+export async function updateProfileAdmin(
+  id: string,
+  input: UpdateProfileAdminInput,
+): Promise<ProfileRow> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+
+  // Build the partial update object; only include fields that were explicitly provided.
+  const setValues: {
+    display_name?: string | null;
+    role?:         ProductionRole;
+    district_id?:  string | null;
+    school_id?:    string | null;
+    real_email?:   string | null;
+    username?:     string | null;
+    active?:       boolean;
+    updated_at:    Date;
+  } = { updated_at: new Date() };
+
+  if ('displayName' in input) setValues.display_name = input.displayName ?? null;
+  if ('role'        in input) setValues.role         = input.role!;
+  if ('districtId'  in input) setValues.district_id  = input.districtId  ?? null;
+  if ('schoolId'    in input) setValues.school_id    = input.schoolId    ?? null;
+  if ('realEmail'   in input) setValues.real_email   = input.realEmail   ?? null;
+  if ('username'    in input) setValues.username     = input.username    ?? null;
+  if ('active'      in input) setValues.active       = input.active!;
+
+  try {
+    const [row] = await db
+      .update(profiles)
+      .set(setValues)
+      .where(eq(profiles.id, id))
+      .returning();
+
+    if (!row) {
+      throw new Error(`[adminUserRepository] updateProfileAdmin: profile ${id} not found.`);
+    }
+    const mapped = mapRow(row);
+    if (!mapped) {
+      throw new Error(`[adminUserRepository] updateProfileAdmin: unrecognized role for profile ${id}.`);
+    }
+    return mapped;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Returns the profile whose real_email matches, excluding a given ID.
+ *
+ * Used for uniqueness pre-check before updating real_email in the admin edit flow.
+ * Excludes `excludeId` so an unchanged email doesn't trigger a self-collision.
+ *
+ * Returns null if no other profile uses that real_email.
+ *
+ * @throws on DB connection or query failure.
+ */
+export async function getProfileByRealEmail(
+  realEmail: string,
+  excludeId: string,
+): Promise<ProfileRow | null> {
+  if (!realEmail) return null;
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const [row] = await db
+      .select()
+      .from(profiles)
+      .where(and(eq(profiles.real_email, realEmail), ne(profiles.id, excludeId)))
+      .limit(1);
+
+    if (!row) return null;
+    return mapRow(row);
+  } finally {
+    await client.end();
+  }
+}
+
+// ── Deletion log ──────────────────────────────────────────────────────────────
+
+export interface InsertUserDeletionLogInput {
+  deletedUserId:  string;          // UUID of the deleted profile
+  username:       string | null;
+  email:          string | null;   // Auth e-mail at deletion time
+  realEmail:      string | null;   // Contact e-mail at deletion time
+  displayName:    string | null;
+  role:           string;
+  deletedById:    string;          // UUID of the superadmin performing the deletion
+  deletedByEmail: string;          // E-mail of the superadmin (denormalized for audit)
+  reason?:        string | null;
+}
+
+/**
+ * Writes a deletion log entry BEFORE the auth user is deleted.
+ *
+ * auto_purge_at is set to 12 months from now (cleanup is manual or via cron).
+ *
+ * IMPORTANT: If this throws, the caller MUST abort the deletion — no auth user
+ * should be removed without a corresponding log entry.
+ *
+ * @throws on DB connection or query failure.
+ */
+export async function insertUserDeletionLog(input: InsertUserDeletionLogInput): Promise<void> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  const now = new Date();
+  const autoPurgeAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // +12 months
+
+  try {
+    await db.insert(userDeletionLogs).values({
+      deleted_user_id:  input.deletedUserId,
+      username:         input.username         ?? null,
+      email:            input.email            ?? null,
+      real_email:       input.realEmail        ?? null,
+      display_name:     input.displayName      ?? null,
+      role:             input.role,
+      deleted_by_id:    input.deletedById,
+      deleted_by_email: input.deletedByEmail,
+      reason:           input.reason           ?? null,
+      auto_purge_at:    autoPurgeAt,
+    });
   } finally {
     await client.end();
   }

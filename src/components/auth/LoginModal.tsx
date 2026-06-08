@@ -2,12 +2,12 @@
 import { useState } from 'react';
 
 interface Props {
-  onLogin: (email: string, password: string) => Promise<{ error: string | null }>;
+  onLogin: (identifier: string, password: string) => Promise<{ error: string | null }>;
   onClose: () => void;
 }
 
 export default function LoginModal({ onLogin, onClose }: Props) {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -16,7 +16,7 @@ export default function LoginModal({ onLogin, onClose }: Props) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const result = await onLogin(email.trim(), password);
+    const result = await onLogin(identifier.trim(), password);
     setSubmitting(false);
     if (result.error) {
       setError(result.error);
@@ -43,13 +43,13 @@ export default function LoginModal({ onLogin, onClose }: Props) {
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           <label className="login-label">
-            <span>E-Mail</span>
+            <span>E-Mail oder Benutzerkennung</span>
             <input
               className="login-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              autoComplete="username"
               autoFocus
               required
               disabled={submitting}

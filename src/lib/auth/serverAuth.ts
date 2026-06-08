@@ -2,6 +2,7 @@ import type { AccessUser } from '@/lib/auth/accessControl';
 import { resolveDemoAccessUserFromRequest } from '@/lib/auth/accessControl';
 import { createSupabaseServerClient } from '@/lib/auth/supabaseServer';
 import { getProfileByUserId } from '@/lib/db/profileRepository';
+import type { ProfileRow } from '@/lib/db/schema.types';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -74,6 +75,43 @@ export async function resolveAuthenticatedUser(request: Request): Promise<Access
     districtId: profile.district_id ?? undefined,
     schoolId:   profile.school_id   ?? undefined,
   };
+}
+
+/**
+ * Resolves the full ProfileRow for an incoming server-side request.
+ *
+ * Like resolveAuthenticatedUser, but returns the complete ProfileRow
+ * instead of the minimal AccessUser shape. Useful where extra profile
+ * fields (username, mustChangePassword, realEmail, etc.) are needed.
+ *
+ * No dev demo fallback — demo mode carries no database profile.
+ * Returns null if:
+ *   - no Bearer token
+ *   - token invalid / Supabase ENV missing
+ *   - no matching profile row
+ *   - profile.active === false
+ *
+ * Throws on DB connection or query failure.
+ */
+export async function resolveProfileFromRequest(request: Request): Promise<ProfileRow | null> {
+  const token = extractBearerToken(request.headers.get('Authorization'));
+  if (!token) return null;
+
+  let userId: string;
+  try {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return null;
+    userId = data.user.id;
+  } catch {
+    // ENV not configured or network failure — no profile available.
+    return null;
+  }
+
+  const profile = await getProfileByUserId(userId);
+  if (!profile) return null;
+  if (!profile.active) return null;
+  return profile;
 }
 
 /**
