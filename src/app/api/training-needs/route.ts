@@ -7,7 +7,7 @@ import {
   canViewTrainingNeeds,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
-import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
+import { resolveAuthenticatedUser, enforcePasswordChangeGate } from '@/lib/auth/serverAuth';
 import type { TrainingNeedFormat, TrainingNeedPriority } from '@/types/trainingNeed';
 
 const VALID_PRIORITIES: TrainingNeedPriority[] = ['hoch', 'mittel', 'niedrig'];
@@ -51,6 +51,9 @@ function isTrainingNeedFormat(value: string): value is TrainingNeedFormat {
 
 export async function GET(request: Request) {
   try {
+    const gate = await enforcePasswordChangeGate(request);
+    if (gate) return gate;
+
     const url = new URL(request.url);
     const districtId = url.searchParams.get('districtId')?.trim();
     const accessUser = await resolveAuthenticatedUser(request);
@@ -92,6 +95,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Defense-in-depth: an authenticated user with a pending password change is
+  // blocked here. The unauthenticated school-code flow (no token) is unaffected
+  // because resolveProfileFromRequest returns null without a Bearer token.
+  const gate = await enforcePasswordChangeGate(request);
+  if (gate) return gate;
+
   let body: TrainingNeedRequestBody;
 
   try {

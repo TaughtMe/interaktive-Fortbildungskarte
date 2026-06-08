@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import type { AccessUser } from '@/lib/auth/accessControl';
 import { resolveDemoAccessUserFromRequest } from '@/lib/auth/accessControl';
 import { createSupabaseServerClient } from '@/lib/auth/supabaseServer';
@@ -112,6 +113,46 @@ export async function resolveProfileFromRequest(request: Request): Promise<Profi
   if (!profile) return null;
   if (!profile.active) return null;
   return profile;
+}
+
+/**
+ * Defense-in-depth gate for the must_change_password flag.
+ *
+ * The flag is set whenever an admin creates an account or resets a password.
+ * The frontend shows a blocking modal, but that alone is bypassable: a user
+ * holding the temporary password can obtain a valid JWT via /api/auth/signin
+ * and call API routes directly. This gate enforces the flag on the server so a
+ * pending password change cannot be skipped.
+ *
+ * Returns a 403 { error: 'PASSWORD_CHANGE_REQUIRED' } response when the resolved
+ * profile still requires a password change, otherwise null.
+ *
+ * MUST NOT be applied to:
+ *   - GET  /api/me                 (frontend needs it to detect the flag)
+ *   - POST /api/me/change-password (the route that clears the flag)
+ */
+export function passwordChangeBlockResponse(profile: ProfileRow | null): NextResponse | null {
+  if (profile?.must_change_password === true) {
+    return NextResponse.json({ error: 'PASSWORD_CHANGE_REQUIRED' }, { status: 403 });
+  }
+  return null;
+}
+
+/**
+ * Convenience wrapper: resolves the profile from the request and returns a
+ * 403 PASSWORD_CHANGE_REQUIRED response if a password change is pending.
+ *
+ * Use in routes that resolve auth via resolveAuthenticatedUser (which does not
+ * carry the flag). Routes that already hold a ProfileRow should call
+ * passwordChangeBlockResponse(actor) directly to avoid a second resolution.
+ *
+ * Fail-open by design: requests without a real profile (no token, dev demo
+ * mode, or the unauthenticated school-code flow) are never blocked here — their
+ * own route auth decides. There is no flag without a profile, so this is safe.
+ */
+export async function enforcePasswordChangeGate(request: Request): Promise<NextResponse | null> {
+  const profile = await resolveProfileFromRequest(request);
+  return passwordChangeBlockResponse(profile);
 }
 
 /**

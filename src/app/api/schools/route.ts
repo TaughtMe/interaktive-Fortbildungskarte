@@ -5,10 +5,13 @@ import {
   filterSchoolsForUser,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
-import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
+import { resolveAuthenticatedUser, enforcePasswordChangeGate } from '@/lib/auth/serverAuth';
 
 export async function GET(request: Request) {
   try {
+    const gate = await enforcePasswordChangeGate(request);
+    if (gate) return gate;
+
     const url = new URL(request.url);
     const districtId = url.searchParams.get('districtId')?.trim();
     const accessUser = await resolveAuthenticatedUser(request);

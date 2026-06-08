@@ -4,7 +4,7 @@ import {
   canViewSchoolBasicInfo,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
-import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
+import { resolveAuthenticatedUser, enforcePasswordChangeGate } from '@/lib/auth/serverAuth';
 
 interface RouteContext {
   params: Promise<{
@@ -14,6 +14,9 @@ interface RouteContext {
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
+    const gate = await enforcePasswordChangeGate(request);
+    if (gate) return gate;
+
     const { id } = await params;
     const accessUser = await resolveAuthenticatedUser(request);
 

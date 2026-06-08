@@ -6,7 +6,7 @@ import {
   canExportTrainingNeeds,
   DEMO_ACCESS_CONTROL_NOTICE,
 } from '@/lib/auth/accessControl';
-import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
+import { resolveAuthenticatedUser, enforcePasswordChangeGate } from '@/lib/auth/serverAuth';
 import { normalizeRole } from '@/types/auth';
 import { FORMAT_LABELS, PRIORITY_LABELS, type TrainingNeedPriority } from '@/types/trainingNeed';
 
@@ -42,6 +42,9 @@ function normalizeSortMode(value: string | null): SortMode {
 
 export async function GET(request: Request) {
   try {
+    const gate = await enforcePasswordChangeGate(request);
+    if (gate) return gate;
+
     const url = new URL(request.url);
     const topic = url.searchParams.get('topic')?.trim() ?? '';
     const priority = url.searchParams.get('priority')?.trim() ?? '';

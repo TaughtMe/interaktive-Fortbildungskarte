@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveProfileFromRequest } from '@/lib/auth/serverAuth';
+import { resolveProfileFromRequest, passwordChangeBlockResponse } from '@/lib/auth/serverAuth';
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabaseAuthProvider';
 import {
   getProfileById,
@@ -101,6 +101,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const pwBlock = passwordChangeBlockResponse(actor);
+    if (pwBlock) return pwBlock;
     if (normalizeRole(actor.role) !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -321,6 +323,8 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const pwBlock = passwordChangeBlockResponse(actor);
+    if (pwBlock) return pwBlock;
     if (normalizeRole(actor.role) !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

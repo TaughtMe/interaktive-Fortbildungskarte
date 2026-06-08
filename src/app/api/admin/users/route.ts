@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { resolveAuthenticatedUser, resolveProfileFromRequest } from '@/lib/auth/serverAuth';
+import {
+  resolveAuthenticatedUser,
+  resolveProfileFromRequest,
+  enforcePasswordChangeGate,
+  passwordChangeBlockResponse,
+} from '@/lib/auth/serverAuth';
 import { AuthProviderError } from '@/lib/auth/authProvider';
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabaseAuthProvider';
 import { canListUsers, canViewProfile } from '@/lib/auth/userManagementAccess';
@@ -147,6 +152,9 @@ async function createWithPasswordAndProfile(
  */
 export async function GET(request: Request) {
   try {
+    const gate = await enforcePasswordChangeGate(request);
+    if (gate) return gate;
+
     const actor = await resolveAuthenticatedUser(request);
 
     if (!actor) {
@@ -222,6 +230,9 @@ export async function POST(request: Request) {
     if (!actorProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const pwBlock = passwordChangeBlockResponse(actorProfile);
+    if (pwBlock) return pwBlock;
 
     if (normalizeRole(actorProfile.role) !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

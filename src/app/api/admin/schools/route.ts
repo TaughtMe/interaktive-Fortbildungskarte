@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveAuthenticatedUser } from '@/lib/auth/serverAuth';
+import { resolveAuthenticatedUser, enforcePasswordChangeGate } from '@/lib/auth/serverAuth';
 import { getAllSchoolOptions } from '@/lib/db/adminUserRepository';
 import { normalizeRole } from '@/types/auth';
 
@@ -13,6 +13,9 @@ import { normalizeRole } from '@/types/auth';
  */
 export async function GET(request: Request) {
   try {
+    const gate = await enforcePasswordChangeGate(request);
+    if (gate) return gate;
+
     const actor = await resolveAuthenticatedUser(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (normalizeRole(actor.role) !== 'superadmin') {
