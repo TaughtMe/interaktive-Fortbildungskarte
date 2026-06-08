@@ -153,6 +153,10 @@ export const profiles = pgTable('profiles', {
   last_login_at:        timestamp('last_login_at', { withTimezone: true }),
   // Self-Reference FK (profiles_created_by_fk) liegt in SQL-Migration 0004.
   created_by:           uuid('created_by'),
+  // ── Phase 2: Soft-Delete (Migration 0005) ───────────────────
+  // Solange != NULL: Konto deaktiviert, wartet auf endgültige Löschung.
+  // Endgültige Löschung (deleteAuthUser) erfolgt nach Ablauf des 30-Tage-Fensters.
+  scheduled_deletion_at: timestamp('scheduled_deletion_at', { withTimezone: true }),
   // ────────────────────────────────────────────────────────────
   created_at:           timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at:           timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -163,6 +167,7 @@ export const profiles = pgTable('profiles', {
   index('pg_profiles_active_idx').on(table.active),
   index('pg_profiles_username_idx').on(table.username),
   index('pg_profiles_is_local_account_idx').on(table.is_local_account),
+  index('pg_profiles_scheduled_deletion_idx').on(table.scheduled_deletion_at),
 ]);
 
 export const auditLogs = pgTable('audit_logs', {

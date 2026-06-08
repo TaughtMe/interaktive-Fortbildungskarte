@@ -28,7 +28,7 @@ const ROLE_ORDER: Record<ProductionRole, number> = {
 // ── Filter state ──────────────────────────────────────────────────────────────
 
 type FilterRole        = ProductionRole | 'all';
-type FilterStatus      = 'all' | 'active' | 'inactive' | 'must_change_pw';
+type FilterStatus      = 'all' | 'active' | 'inactive' | 'must_change_pw' | 'pending_deletion';
 type FilterAccountType = 'all' | 'email' | 'local';
 
 interface FilterState {
@@ -51,6 +51,10 @@ function getUserLabel(user: ProfileRow): string {
 
 function sortUsers(users: ProfileRow[]): ProfileRow[] {
   return [...users].sort((a, b) => {
+    // Soft-deleted (pending deletion) last
+    const aPending = !!a.scheduled_deletion_at;
+    const bPending = !!b.scheduled_deletion_at;
+    if (aPending !== bPending) return aPending ? 1 : -1;
     // Active first, then inactive
     if (a.active !== b.active) return a.active ? -1 : 1;
     // Within same active state: sort by role order
@@ -60,6 +64,17 @@ function sortUsers(users: ProfileRow[]): ProfileRow[] {
     // Same role: alphabetically (German locale)
     return getUserLabel(a).localeCompare(getUserLabel(b), 'de');
   });
+}
+
+/** Formats a deletion date as "DD. Mon YYYY" in German locale. */
+function formatDeletionDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('de-DE', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function matchesSearch(user: ProfileRow, query: string): boolean {
@@ -76,9 +91,10 @@ function matchesSearch(user: ProfileRow, query: string): boolean {
 function matchesFilters(user: ProfileRow, filters: FilterState): boolean {
   if (filters.role !== 'all' && user.role !== filters.role) return false;
   if (filters.status !== 'all') {
-    if (filters.status === 'active'        && (!user.active || user.must_change_password)) return false;
-    if (filters.status === 'inactive'      && user.active)   return false;
-    if (filters.status === 'must_change_pw' && (!user.active || !user.must_change_password)) return false;
+    if (filters.status === 'active'           && (!user.active || user.must_change_password || !!user.scheduled_deletion_at)) return false;
+    if (filters.status === 'inactive'         && (user.active || !!user.scheduled_deletion_at)) return false;
+    if (filters.status === 'must_change_pw'   && (!user.active || !user.must_change_password))  return false;
+    if (filters.status === 'pending_deletion' && !user.scheduled_deletion_at)                   return false;
   }
   if (filters.accountType !== 'all') {
     if (filters.accountType === 'local' && !user.is_local_account) return false;
@@ -127,8 +143,9 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
   const [deleteUser,        setDeleteUser]        = useState<ProfileRow | null>(null);
 
   // ── Inline action state ────────────────────────────────────────────────────
-  const [togglingId,  setTogglingId]  = useState<string | null>(null);
-  const [actionError, setActionError] = useState<{ userId: string; message: string } | null>(null);
+  const [togglingId,   setTogglingId]   = useState<string | null>(null);
+  const [restoringId,  setRestoringId]  = useState<string | null>(null);
+  const [actionError,  setActionError]  = useState<{ userId: string; message: string } | null>(null);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -248,6 +265,38 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
     }
   }
 
+  async function handleRestore(user: ProfileRow) {
+    if (!accessToken) return;
+    setRestoringId(user.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/restore`, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      const body = await res.json() as { data?: ProfileRow; error?: string };
+      if (!res.ok) {
+        setActionError({
+          userId:  user.id,
+          message: describeAdminActionError(body.error, 'Wiederherstellung fehlgeschlagen.'),
+        });
+      } else {
+        if (body.data) {
+          setUsers((prev) => prev.map((u) => (u.id === body.data!.id ? body.data! : u)));
+        } else {
+          loadUsers();
+        }
+      }
+    } catch {
+      setActionError({
+        userId:  user.id,
+        message: 'Verbindungsfehler — bitte erneut versuchen.',
+      });
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -363,6 +412,7 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
                 <option value="active">Aktiv</option>
                 <option value="inactive">Inaktiv</option>
                 <option value="must_change_pw">Pw-Wechsel ausstehend</option>
+                <option value="pending_deletion">Ausstehende Löschung</option>
               </select>
 
               {/* Account type filter */}
@@ -405,38 +455,52 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
                   // Mirrors the backend guards: self-protection (own account)
                   // and peer-protection (other superadmin accounts). Always
                   // derived from currentUserId (real session) — never preview.
-                  const isSelf            = !!currentUserId && user.id === currentUserId;
+                  const isSelf = !!currentUserId && user.id === currentUserId;
                   const targetIsSuperadminPeer = isSuperadminPeer(currentUserId, user);
                   const peerHint = 'Andere Superadmin-Konten können aus Sicherheitsgründen nicht direkt verändert werden.';
+                  const isPendingDeletion = !!user.scheduled_deletion_at;
 
-                  const passwordBlocked = isSelf || targetIsSuperadminPeer;
+                  const passwordBlocked = isSelf || targetIsSuperadminPeer || isPendingDeletion;
                   const passwordTitle = isSelf
                     ? 'Eigenes Passwort über die normale Passwort-Änderung anpassen.'
                     : targetIsSuperadminPeer
                       ? peerHint
-                      : (!user.active ? 'Konto ist deaktiviert' : 'Passwort zurücksetzen');
+                      : isPendingDeletion
+                        ? 'Konto ist zur Löschung vorgemerkt.'
+                        : (!user.active ? 'Konto ist deaktiviert' : 'Passwort zurücksetzen');
 
                   // Deactivation is blocked for self and for active superadmin peers;
                   // re-activating a peer stays allowed (it only restores access).
-                  const toggleBlocked = isSelf || (targetIsSuperadminPeer && user.active);
+                  // Soft-deleted accounts cannot be toggled (use Restore instead).
+                  const toggleBlocked = isSelf || (targetIsSuperadminPeer && user.active) || isPendingDeletion;
                   const toggleTitle = isSelf
                     ? 'Sie können Ihr eigenes Konto nicht deaktivieren.'
                     : (targetIsSuperadminPeer && user.active)
                       ? peerHint
-                      : undefined;
+                      : isPendingDeletion
+                        ? 'Konto ist zur Löschung vorgemerkt — bitte über "Wiederherstellen" reaktivieren.'
+                        : undefined;
 
-                  const deleteBlocked = isSelf || targetIsSuperadminPeer;
+                  // Delete is blocked only for self and if already pending deletion.
+                  // Peer-superadmin protection for DELETE was intentionally removed.
+                  const deleteBlocked = isSelf || isPendingDeletion;
                   const deleteTitle = isSelf
                     ? 'Sie können Ihr eigenes Konto nicht löschen.'
-                    : targetIsSuperadminPeer
-                      ? peerHint
+                    : isPendingDeletion
+                      ? 'Konto ist bereits zur Löschung vorgemerkt.'
                       : undefined;
 
                   return (
                   <div key={user.id}>
                     <div
                       className="dash-item"
-                      style={!user.active ? { opacity: 0.6 } : undefined}
+                      style={
+                        isPendingDeletion
+                          ? { opacity: 0.55, borderLeft: '3px solid var(--color-danger, #dc2626)' }
+                          : !user.active
+                            ? { opacity: 0.6 }
+                            : undefined
+                      }
                     >
                       <div className="dash-item-main">
                         {/* Main line: display_name / username / email */}
@@ -484,6 +548,15 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
                         {user.must_change_password && user.active && (
                           <span className="fb-tag" style={{ opacity: 0.7 }}>Pw-Wechsel</span>
                         )}
+                        {isPendingDeletion && user.scheduled_deletion_at && (
+                          <span className="fb-tag" style={{
+                            color:           'var(--color-danger, #dc2626)',
+                            borderColor:     'var(--color-danger, #dc2626)',
+                            backgroundColor: 'rgba(220,38,38,0.07)',
+                          }}>
+                            Löschen am {formatDeletionDate(user.scheduled_deletion_at)}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -497,59 +570,80 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
                         borderBottom: '1px solid var(--color-border, #e5e5e5)',
                         marginBottom: '-1px',
                       }}>
-                        {/* Edit */}
-                        <button
-                          type="button"
-                          className="btn compact"
-                          onClick={() => { setActionError(null); setEditUser(user); }}
-                          disabled={!!togglingId}
-                          style={{ fontSize: '0.78rem' }}
-                        >
-                          Bearbeiten
-                        </button>
+                        {isPendingDeletion ? (
+                          /* ── Soft-deleted: only Restore button ── */
+                          <button
+                            type="button"
+                            className="btn compact"
+                            onClick={() => { setActionError(null); handleRestore(user); }}
+                            disabled={restoringId === user.id}
+                            title="Konto wiederherstellen (innerhalb von 30 Tagen möglich)"
+                            style={{
+                              fontSize:    '0.78rem',
+                              color:       'var(--color-success, #16a34a)',
+                              borderColor: 'var(--color-success, #16a34a)',
+                            }}
+                          >
+                            {restoringId === user.id ? '…' : 'Wiederherstellen'}
+                          </button>
+                        ) : (
+                          /* ── Normal account: full action set ── */
+                          <>
+                            {/* Edit */}
+                            <button
+                              type="button"
+                              className="btn compact"
+                              onClick={() => { setActionError(null); setEditUser(user); }}
+                              disabled={!!togglingId}
+                              style={{ fontSize: '0.78rem' }}
+                            >
+                              Bearbeiten
+                            </button>
 
-                        {/* Reset password */}
-                        <button
-                          type="button"
-                          className="btn compact"
-                          onClick={() => { setActionError(null); setResetPasswordUser(user); }}
-                          disabled={!!togglingId || !user.active || passwordBlocked}
-                          title={passwordTitle}
-                          style={{ fontSize: '0.78rem' }}
-                        >
-                          Passwort
-                        </button>
+                            {/* Reset password */}
+                            <button
+                              type="button"
+                              className="btn compact"
+                              onClick={() => { setActionError(null); setResetPasswordUser(user); }}
+                              disabled={!!togglingId || !user.active || passwordBlocked}
+                              title={passwordTitle}
+                              style={{ fontSize: '0.78rem' }}
+                            >
+                              Passwort
+                            </button>
 
-                        {/* Activate / deactivate */}
-                        <button
-                          type="button"
-                          className="btn compact"
-                          onClick={() => handleToggleActive(user)}
-                          disabled={togglingId === user.id || toggleBlocked}
-                          title={toggleTitle}
-                          style={{ fontSize: '0.78rem' }}
-                        >
-                          {togglingId === user.id
-                            ? '…'
-                            : user.active ? 'Deaktivieren' : 'Aktivieren'
-                          }
-                        </button>
+                            {/* Activate / deactivate */}
+                            <button
+                              type="button"
+                              className="btn compact"
+                              onClick={() => handleToggleActive(user)}
+                              disabled={togglingId === user.id || toggleBlocked}
+                              title={toggleTitle}
+                              style={{ fontSize: '0.78rem' }}
+                            >
+                              {togglingId === user.id
+                                ? '…'
+                                : user.active ? 'Deaktivieren' : 'Aktivieren'
+                              }
+                            </button>
 
-                        {/* Delete */}
-                        <button
-                          type="button"
-                          className="btn compact"
-                          onClick={() => { setActionError(null); setDeleteUser(user); }}
-                          disabled={!!togglingId || deleteBlocked}
-                          title={deleteTitle}
-                          style={{
-                            fontSize:    '0.78rem',
-                            color:       'var(--color-danger, #dc2626)',
-                            borderColor: 'var(--color-danger, #dc2626)',
-                          }}
-                        >
-                          Löschen
-                        </button>
+                            {/* Delete → soft-delete with confirmation */}
+                            <button
+                              type="button"
+                              className="btn compact"
+                              onClick={() => { setActionError(null); setDeleteUser(user); }}
+                              disabled={!!togglingId || deleteBlocked}
+                              title={deleteTitle}
+                              style={{
+                                fontSize:    '0.78rem',
+                                color:       'var(--color-danger, #dc2626)',
+                                borderColor: 'var(--color-danger, #dc2626)',
+                              }}
+                            >
+                              Löschen
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -605,7 +699,10 @@ export default function UserManagementDashboard({ accessToken, canCreate, curren
         <DeleteConfirmDialog
           user={deleteUser}
           accessToken={accessToken}
-          onDeleted={() => { setDeleteUser(null); loadUsers(); }}
+          onSoftDeleted={(updated) => {
+            setDeleteUser(null);
+            setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+          }}
           onClose={() => setDeleteUser(null)}
         />
       )}

@@ -49,6 +49,8 @@ export interface ProfileRow {
   must_change_password: boolean;        // erzwingt Passwortwechsel beim nächsten Login
   last_login_at:        string | null;  // ISO-8601 oder null
   created_by:           string | null;  // uuid des erstellenden Superadmins, oder null
+  // ── Phase 2: Soft-Delete ─────────────────────────────────────
+  scheduled_deletion_at: string | null; // ISO-8601 oder null — gesetzt = Soft-Delete ausstehend
   // ────────────────────────────────────────────────────────────
   created_at:           string;
   updated_at:           string;

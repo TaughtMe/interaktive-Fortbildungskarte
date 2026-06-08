@@ -4,29 +4,34 @@ import type { ProfileRow } from '@/lib/db/schema.types';
 import { describeAdminActionError } from '@/lib/auth/userManagementAccess';
 
 interface Props {
-  /** The user to be deleted. */
-  user:        ProfileRow;
-  accessToken: string;
-  /** Called after the user was successfully deleted — close the dialog and reload. */
-  onDeleted:   () => void;
+  /** The user to be soft-deleted. */
+  user:          ProfileRow;
+  accessToken:   string;
+  /**
+   * Called after the soft-deletion succeeded.
+   * Receives the updated ProfileRow (active=false, scheduled_deletion_at set).
+   * The caller should update the user in the list in-place — no full reload needed.
+   */
+  onSoftDeleted: (updated: ProfileRow) => void;
   /** Called when the dialog is cancelled. */
-  onClose:     () => void;
+  onClose:       () => void;
 }
 
 const CONFIRM_WORD = 'LÖSCHEN';
 
 /**
- * Confirmation dialog for permanent account deletion.
+ * Confirmation dialog for soft-deletion (30-day grace period).
  *
  * Requires the admin to type "LÖSCHEN" before the confirm button activates.
- * Warns that school-related data (Fortbildungsbedarfe etc.) is preserved.
+ * Explains that the account is preserved for 30 days and can be restored.
  *
  * The backend enforces:
  *   - Superadmin role check
- *   - Deletion log written before the auth user is removed
+ *   - Deletion log written before the profile is marked
  *   - Self-deletion is blocked
+ *   - Last-superadmin protection
  */
-export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onClose }: Props) {
+export default function DeleteConfirmDialog({ user, accessToken, onSoftDeleted, onClose }: Props) {
   const [input,    setInput]    = useState('');
   const [error,    setError]    = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -55,7 +60,13 @@ export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onCl
         return;
       }
 
-      onDeleted();
+      const body = await res.json() as { data?: ProfileRow };
+      if (body.data) {
+        onSoftDeleted(body.data);
+      } else {
+        // Fallback: close without update (list will resync on next load)
+        onClose();
+      }
     } catch {
       setError('Verbindungsfehler — bitte erneut versuchen.');
       setDeleting(false);
@@ -73,7 +84,7 @@ export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onCl
       <div
         className="login-card"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '420px', width: '100%' }}
+        style={{ maxWidth: '440px', width: '100%' }}
       >
         <div className="login-head">
           <h2 className="login-title">Konto löschen</h2>
@@ -106,15 +117,22 @@ export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onCl
             </p>
           )}
 
-          <p style={{
-            fontSize:     '0.875rem',
-            color:        'var(--color-muted, #555)',
-            marginBottom: '16px',
+          {/* 30-day soft-delete explanation */}
+          <div style={{
+            background:   'rgba(220,38,38,0.06)',
+            border:       '1px solid rgba(220,38,38,0.2)',
+            borderRadius: '6px',
+            padding:      '10px 12px',
+            marginBottom: '14px',
+            fontSize:     '0.82rem',
             lineHeight:   '1.55',
+            color:        'var(--ink-1)',
           }}>
-            Das Konto wird unwiderruflich gelöscht.{' '}
-            Schulbezogene Daten (Fortbildungsbedarfe u. a.) bleiben erhalten.
-          </p>
+            <strong>30-Tage-Wiederherstellungsfenster:</strong> Das Konto wird
+            zunächst deaktiviert und erst nach 30 Tagen endgültig gelöscht.
+            Innerhalb dieser Frist kann es jederzeit wiederhergestellt werden.
+            Schulbezogene Daten (Fortbildungsbedarfe u. a.) bleiben in jedem Fall erhalten.
+          </div>
 
           {/* Confirmation input */}
           <label className="login-label" style={{ marginBottom: '12px' }}>
@@ -166,7 +184,7 @@ export default function DeleteConfirmDialog({ user, accessToken, onDeleted, onCl
                   : {}),
               }}
             >
-              {deleting ? 'Wird gelöscht …' : 'Endgültig löschen'}
+              {deleting ? 'Wird vorgemerkt …' : 'Löschen vormerken'}
             </button>
           </div>
         </div>

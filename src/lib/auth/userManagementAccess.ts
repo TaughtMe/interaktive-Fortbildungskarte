@@ -151,12 +151,14 @@ export function isSuperadminPeer(actorId: string | null, target: ProfileRow): bo
   return target.id !== actorId && normalizeRole(target.role) === 'superadmin';
 }
 
-/** User-facing German translations for the P1 Multi-Superadmin-Schutz error codes. */
+/** User-facing German translations for admin action error codes. */
 const ADMIN_ACTION_ERROR_MESSAGES: Record<string, string> = {
   SUPERADMIN_PEER_ACTION_FORBIDDEN:
     'Andere Superadmin-Konten können aus Sicherheitsgründen nicht direkt verändert werden.',
   LAST_SUPERADMIN_REQUIRED:
     'Es muss mindestens ein aktiver Superadmin erhalten bleiben.',
+  ALREADY_PENDING_DELETION:
+    'Dieses Konto ist bereits zur Löschung vorgemerkt.',
 };
 
 /**

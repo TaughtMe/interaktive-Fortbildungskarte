@@ -10,6 +10,7 @@ import { supabaseAuthProvider } from '@/lib/auth/providers/supabaseAuthProvider'
 import { canListUsers, canViewProfile } from '@/lib/auth/userManagementAccess';
 import {
   getAllProfiles,
+  getExpiredSoftDeletedProfiles,
   getProfilesByDistrictId,
   getProfilesBySchoolId,
   insertProfile,
@@ -166,6 +167,26 @@ export async function GET(request: Request) {
     }
 
     const role = normalizeRole(actor.role);
+
+    // ── Lazy purge: hard-delete accounts past the 30-day grace period ─────────
+    // Triggered on every superadmin list load — no separate cron job needed.
+    // Errors are swallowed; a failed purge must never block the list response.
+    if (role === 'superadmin') {
+      try {
+        const expired = await getExpiredSoftDeletedProfiles();
+        for (const profile of expired) {
+          try {
+            await supabaseAuthProvider.deleteAuthUser(profile.id);
+          } catch {
+            // Ignore individual hard-delete failures — the account will be
+            // retried on the next list load once the grace period check runs again.
+          }
+        }
+      } catch {
+        // Ignore purge errors entirely — list load must still succeed.
+      }
+    }
+
     let rawProfiles;
 
     if (role === 'superadmin') {

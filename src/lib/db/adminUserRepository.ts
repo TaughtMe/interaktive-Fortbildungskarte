@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, lt, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { getPostgresDatabaseUrl } from './postgresClient';
@@ -41,22 +41,24 @@ type ProfileSelectRow = typeof profiles.$inferSelect;
 function mapRow(row: ProfileSelectRow): ProfileRow | null {
   if (!VALID_ROLES.has(row.role)) return null;
   return {
-    id:                   row.id,
-    email:                row.email,
-    role:                 row.role as ProductionRole,
-    district_id:          row.district_id,
-    school_id:            row.school_id,
-    display_name:         row.display_name,
-    active:               row.active,
+    id:                    row.id,
+    email:                 row.email,
+    role:                  row.role as ProductionRole,
+    district_id:           row.district_id,
+    school_id:             row.school_id,
+    display_name:          row.display_name,
+    active:                row.active,
     // Phase 1: neue Felder
-    username:             row.username ?? null,
-    real_email:           row.real_email ?? null,
-    is_local_account:     row.is_local_account,
-    must_change_password: row.must_change_password,
-    last_login_at:        row.last_login_at?.toISOString() ?? null,
-    created_by:           row.created_by ?? null,
-    created_at:           row.created_at.toISOString(),
-    updated_at:           row.updated_at.toISOString(),
+    username:              row.username ?? null,
+    real_email:            row.real_email ?? null,
+    is_local_account:      row.is_local_account,
+    must_change_password:  row.must_change_password,
+    last_login_at:         row.last_login_at?.toISOString() ?? null,
+    created_by:            row.created_by ?? null,
+    // Phase 2: Soft-Delete
+    scheduled_deletion_at: row.scheduled_deletion_at?.toISOString() ?? null,
+    created_at:            row.created_at.toISOString(),
+    updated_at:            row.updated_at.toISOString(),
   };
 }
 
@@ -433,6 +435,88 @@ export async function insertUserDeletionLog(input: InsertUserDeletionLogInput): 
       reason:           input.reason           ?? null,
       auto_purge_at:    autoPurgeAt,
     });
+  } finally {
+    await client.end();
+  }
+}
+
+// ── Soft-Delete / Restore (Phase 2) ──────────────────────────────────────────
+
+/** Grace period in milliseconds (30 days). */
+const SOFT_DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Marks a profile for soft-deletion:
+ *   - sets active = false
+ *   - sets scheduled_deletion_at = now + 30 days
+ *   - updates updated_at
+ *
+ * Does NOT write to user_deletion_logs — the caller (route) is responsible
+ * for calling insertUserDeletionLog BEFORE this function (fail-fast pattern).
+ *
+ * @throws if the profile does not exist or on DB failure.
+ */
+export async function softDeleteProfile(id: string): Promise<ProfileRow> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  const now = new Date();
+  const scheduledDeletionAt = new Date(now.getTime() + SOFT_DELETE_GRACE_MS);
+  try {
+    const [row] = await db
+      .update(profiles)
+      .set({ active: false, scheduled_deletion_at: scheduledDeletionAt, updated_at: now })
+      .where(eq(profiles.id, id))
+      .returning();
+    if (!row) throw new Error(`[adminUserRepository] softDeleteProfile: profile ${id} not found.`);
+    const mapped = mapRow(row);
+    if (!mapped) throw new Error(`[adminUserRepository] softDeleteProfile: unrecognized role for profile ${id}.`);
+    return mapped;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Restores a soft-deleted profile:
+ *   - clears scheduled_deletion_at (sets to NULL)
+ *   - sets active = true
+ *   - updates updated_at
+ *
+ * @throws if the profile does not exist or on DB failure.
+ */
+export async function restoreProfile(id: string): Promise<ProfileRow> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const [row] = await db
+      .update(profiles)
+      .set({ active: true, scheduled_deletion_at: null, updated_at: new Date() })
+      .where(eq(profiles.id, id))
+      .returning();
+    if (!row) throw new Error(`[adminUserRepository] restoreProfile: profile ${id} not found.`);
+    const mapped = mapRow(row);
+    if (!mapped) throw new Error(`[adminUserRepository] restoreProfile: unrecognized role for profile ${id}.`);
+    return mapped;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Returns all profiles whose scheduled_deletion_at is in the past (< now).
+ * These accounts have exceeded the 30-day grace period and should be hard-deleted.
+ *
+ * @throws on DB connection or query failure.
+ */
+export async function getExpiredSoftDeletedProfiles(): Promise<ProfileRow[]> {
+  const client = postgres(requireDatabaseUrl(), { max: 1, ssl: 'require' });
+  const db = drizzle(client);
+  try {
+    const rows = await db
+      .select()
+      .from(profiles)
+      .where(and(isNotNull(profiles.scheduled_deletion_at), lt(profiles.scheduled_deletion_at, new Date())));
+    return rows.map(mapRow).filter((r): r is ProfileRow => r !== null);
   } finally {
     await client.end();
   }

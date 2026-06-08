@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { resolveProfileFromRequest, passwordChangeBlockResponse } from '@/lib/auth/serverAuth';
-import { supabaseAuthProvider } from '@/lib/auth/providers/supabaseAuthProvider';
 import {
   countActiveSuperadmins,
   getProfileById,
   getProfileByRealEmail,
   insertUserDeletionLog,
+  softDeleteProfile,
   updateProfileAdmin,
   type UpdateProfileAdminInput,
 } from '@/lib/db/adminUserRepository';
@@ -342,30 +342,38 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 /**
  * DELETE /api/admin/users/:id
  *
- * Superadmin only. Permanently deletes a user account.
+ * Superadmin only. Initiates a soft-deletion (30-day grace period).
+ *
+ * Instead of immediately removing the account, this endpoint:
+ *   - Sets profiles.active = false (account can no longer log in)
+ *   - Sets profiles.scheduled_deletion_at = now + 30 days
+ * The account is preserved for 30 days and can be restored via POST .../restore.
+ * Actual hard-deletion (deleteAuthUser) occurs automatically when the user list
+ * is loaded and the grace period has expired.
  *
  * Flow:
  *   1. Verify actor is superadmin.
  *   2. Load target profile.
  *   3. Self-protection: actor cannot delete their own account.
- *   3b. P1 Peer-protection: actor cannot delete another superadmin's account
- *       → 403 SUPERADMIN_PEER_ACTION_FORBIDDEN.
- *   3c. P1 Last-superadmin rule (defensive): refuses to delete the system's
- *       last active superadmin → 403 LAST_SUPERADMIN_REQUIRED.
+ *   3b. Already-pending check: account already has scheduled_deletion_at set.
+ *   3c. Last-superadmin protection (defensive): refuses to soft-delete the
+ *       system's last active superadmin → 403 LAST_SUPERADMIN_REQUIRED.
  *   4. Write deletion log (fail-first — abort if log insert fails).
- *   5. Delete Supabase Auth user via Service Role → FK CASCADE removes profile.
- *   6. training_needs.created_by is preserved via ON DELETE SET NULL.
+ *   5. Soft-delete: set active=false + scheduled_deletion_at.
  *
  * IMPORTANT: Step 4 must succeed before step 5. A failed log write
- * stops the deletion — never delete without a log entry.
+ * stops the deletion — never soft-delete without a log entry.
  *
- * Response 200: { success: true }
- * Response 400: self-protection violation (cannot delete own account)
+ * NOTE: The P1 peer-protection for DELETE has been intentionally removed.
+ * Superadmins may delete other superadmin accounts (only self-deletion is
+ * blocked). The last-superadmin guard (3c) prevents removing all superadmins.
+ *
+ * Response 200: { data: ProfileRow }   ← updated profile (soft-deleted state)
+ * Response 400: self-protection or already pending deletion
  * Response 401: no valid session
- * Response 403: insufficient role, peer-protection (SUPERADMIN_PEER_ACTION_FORBIDDEN),
- *               or last-superadmin protection (LAST_SUPERADMIN_REQUIRED)
+ * Response 403: insufficient role or LAST_SUPERADMIN_REQUIRED
  * Response 404: target user not found
- * Response 500: DB or Supabase failure
+ * Response 500: DB failure
  */
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
@@ -396,17 +404,18 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       );
     }
 
-    // ── 3b. Peer-protection (P1: Multi-Superadmin-Schutz) ─────────────────────
-    // A superadmin must not be able to delete another superadmin's account —
-    // avoids mutual takeover/lockout scenarios in multi-superadmin setups.
-    if (normalizeRole(target.role) === 'superadmin') {
-      return NextResponse.json({ error: 'SUPERADMIN_PEER_ACTION_FORBIDDEN' }, { status: 403 });
+    // ── 3b. Already-pending check ─────────────────────────────────────────────
+    // If the account already has a scheduled deletion, reject duplicate requests.
+    if (target.scheduled_deletion_at) {
+      return NextResponse.json(
+        { error: 'ALREADY_PENDING_DELETION' },
+        { status: 400 },
+      );
     }
 
-    // ── 3c. Last-superadmin protection (defensive, P1) ────────────────────────
-    // Self- and peer-protection above already block every path that could
-    // delete the system's last superadmin. This is an independent,
-    // actor-agnostic safety net in case those rules are ever relaxed.
+    // ── 3c. Last-superadmin protection (defensive) ────────────────────────────
+    // Even without peer-protection, we must never remove the system's last
+    // active superadmin. Soft-delete sets active=false, so the count drops.
     if (normalizeRole(target.role) === 'superadmin' && target.active) {
       const activeSuperadmins = await countActiveSuperadmins();
       if (activeSuperadmins <= 1) {
@@ -415,7 +424,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     }
 
     // ── 4. Write deletion log FIRST ───────────────────────────────────────────
-    // If this throws, the deletion is aborted — never delete without a log entry.
+    // If this throws, the soft-deletion is aborted — never proceed without a log.
     await insertUserDeletionLog({
       deletedUserId:  target.id,
       username:       target.username,
@@ -425,13 +434,13 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       role:           target.role,
       deletedById:    actor.id,
       deletedByEmail: actor.email,
-      reason:         null,
+      reason:         'Soft-Delete — 30 Tage Wiederherstellungsfenster',
     });
 
-    // ── 5. Delete auth user (FK CASCADE removes the profile row) ──────────────
-    await supabaseAuthProvider.deleteAuthUser(targetId);
+    // ── 5. Soft-delete: mark account inactive and schedule final deletion ──────
+    const updated = await softDeleteProfile(targetId);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ data: updated });
 
   } catch {
     return NextResponse.json(
